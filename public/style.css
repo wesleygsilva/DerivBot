@@ -1,0 +1,93 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #1e1e1e;
+  color: #f0f0f0;
+  margin: 0;
+  padding: 0;
+}
+
+.container {
+  max-width: 700px;
+  margin: 30px auto;
+  background: #2c2c2c;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.status {
+  background: #3a3a3a;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.status p {
+  margin: 8px 0;
+  font-size: 18px;
+}
+
+.controls {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+button {
+  font-size: 16px;
+  padding: 10px 20px;
+  margin: 5px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#startBtn {
+  background: #4caf50;
+  color: white;
+}
+
+#stopBtn {
+  background: #f44336;
+  color: white;
+}
+
+.log {
+  background: #3a3a3a;
+  padding: 15px;
+  border-radius: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.log ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.log li {
+  padding: 6px;
+  margin: 4px 0;
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.log .info {
+  background: #2196f3;
+}
+
+.log .success {
+  background: #4caf50;
+}
+
+.log .error {
+  background: #f44336;
+}
+
+.log .warn {
+  background: #ff9800;
+}
