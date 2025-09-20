@@ -13,18 +13,19 @@ const PORT = 3000;
 app.use(express.static(__dirname + "/public"));
 
 // =========================
-// CONFIG
+// CONFIG - Agora todas as configurações são dinâmicas
 // =========================
 let config = {
-  contract_type: "DIGITODD",  // padrão ímpar
+  contract_type: "DIGITODD",
   duration: 1,
   symbol: "1HZ10V",
   baseStake: 0.35,
   multiplier: 2.2,
   maxMartingale: 8,
-  payout: 0.95,              
-  minPairs: 6,                
-  minImpares: 6              
+  payout: 0.95,
+  minPairs: 6,
+  minImpares: 6,
+  profitGoal: 0,  // Meta de lucro (0 = desabilitado)
 };
 
 // =========================
@@ -69,6 +70,19 @@ function log(message, type = "info") {
 function ensureValidNumber(value, defaultValue = 1.0) {
   const num = parseFloat(value);
   return isNaN(num) || num <= 0 ? defaultValue : num;
+}
+
+// =========================
+// VERIFICAR META DE LUCRO
+// =========================
+function checkProfitGoal() {
+  if (config.profitGoal > 0 && botState.stats.profit >= config.profitGoal) {
+    botState.isRunning = false;
+    log(`🎯 Meta de lucro atingida! Lucro atual: $${botState.stats.profit.toFixed(2)} | Meta: $${config.profitGoal.toFixed(2)}`, "success");
+    io.emit("botStateUpdate", botState);
+    return true;
+  }
+  return false;
 }
 
 // =========================
@@ -185,6 +199,12 @@ function handleTick(tick) {
         botState.martingaleCount = 0;
         botState.currentStake = config.baseStake;
         log(`Trade #${trade.id} WIN | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | +${profit.toFixed(2)}`);
+        
+        // Verificar meta de lucro após win
+        if (checkProfitGoal()) {
+          io.emit("tradeResult", trade);
+          return;
+        }
       } else {
         botState.stats.losses++;
         if (botState.martingaleCount < config.maxMartingale) {
@@ -278,7 +298,9 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD") {
 // SOCKET.IO
 // =========================
 io.on("connection", (socket) => {
+  // Enviar estado e configurações para o cliente
   socket.emit("botStateUpdate", botState);
+  socket.emit("configUpdate", config);
 
   socket.on("connect_bot", (token) => {
     if (!token || token.trim() === "") {
@@ -308,25 +330,53 @@ io.on("connection", (socket) => {
   });
 
   socket.on("update_config", (newConfig) => {
-    const baseStake = ensureValidNumber(newConfig.baseStake, 1.0);
+    const baseStake = ensureValidNumber(newConfig.baseStake, 0.35);
     const multiplier = ensureValidNumber(newConfig.multiplier, 2.0);
     const maxMartingale = parseInt(newConfig.maxMartingale) || 5;
     const payout = ensureValidNumber(newConfig.payout, 0.95);
     const minPairs = parseInt(newConfig.minPairs) || 5;
     const minImpares = parseInt(newConfig.minImpares) || 5;
+    const profitGoal = ensureValidNumber(newConfig.profitGoal, 0);
 
-    if (baseStake < 0.35) return;
-    if (multiplier < 1.1) return;
+    // Validações
+    if (baseStake < 0.35) {
+      log("Stake inicial deve ser no mínimo $0.35", "error");
+      return;
+    }
+    if (multiplier < 1.1) {
+      log("Multiplicador deve ser no mínimo 1.1", "error");
+      return;
+    }
+    if (payout < 0.1 || payout > 5.0) {
+      log("Payout deve estar entre 0.1 e 5.0", "error");
+      return;
+    }
+    if (minPairs < 1 || minPairs > 20) {
+      log("Mínimo de pares deve estar entre 1 e 20", "error");
+      return;
+    }
+    if (minImpares < 1 || minImpares > 20) {
+      log("Mínimo de ímpares deve estar entre 1 e 20", "error");
+      return;
+    }
 
+    // Atualizar configurações
     config.baseStake = baseStake;
     config.multiplier = multiplier;
     config.maxMartingale = maxMartingale;
     config.payout = payout;
     config.minPairs = minPairs;
     config.minImpares = minImpares;
+    config.profitGoal = profitGoal;
 
-    if (botState.martingaleCount === 0) botState.currentStake = config.baseStake;
+    // Reset do stake atual se não estiver em martingale
+    if (botState.martingaleCount === 0) {
+      botState.currentStake = config.baseStake;
+    }
+
+    log("Configurações atualizadas com sucesso");
     io.emit("botStateUpdate", botState);
+    io.emit("configUpdate", config);
   });
 
   socket.on("reset_stats", () => {
@@ -338,12 +388,18 @@ io.on("connection", (socket) => {
     botState.makingEntry = false;
     localTrades = {};
     tradeCounter = 0;
+    log("Estatísticas resetadas");
     io.emit("botStateUpdate", botState);
   });
 
   socket.on("clear_digits", () => {
     botState.lastDigits = [];
+    log("Dígitos limpos");
     io.emit("botStateUpdate", botState);
+  });
+
+  socket.on("get_config", () => {
+    socket.emit("configUpdate", config);
   });
 });
 

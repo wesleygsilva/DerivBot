@@ -21,7 +21,7 @@ body {
 }
 
 .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     background: #f5f5f5;
     border-radius: 15px;
@@ -79,7 +79,7 @@ body {
 
 .main-content {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 300px 1fr 300px;
     gap: 20px;
     padding: 20px;
 }
@@ -93,6 +93,16 @@ body {
 
 .digits-panel {
     grid-column: 1 / -1;
+}
+
+.config-panel {
+    grid-column: 2/4;
+    grid-row: 1;
+}
+
+.stats-panel {
+    grid-column: 1 / 4;
+    grid-row: 2;
 }
 
 .panel h3 {
@@ -118,6 +128,12 @@ body {
     border: 1px solid #ddd;
     border-radius: 5px;
     font-size: 14px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
 }
 
 .btn {
@@ -245,7 +261,7 @@ body {
 
 .stats-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 15px;
     margin-top: 15px;
 }
@@ -270,11 +286,50 @@ body {
     margin-top: 5px;
 }
 
-@media (max-width: 728px) {
+.input-help {
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 3px;
+}
+
+.profit-goal-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.profit-goal-container input[type="checkbox"] {
+    width: auto;
+    margin-right: 5px;
+}
+
+@media (max-width: 1200px) {
+    .main-content { 
+        grid-template-columns: 1fr 1fr; 
+    }
+    .config-panel { 
+        grid-column: 1 / -1; 
+        grid-row: 1;
+    }
+    .stats-panel {
+        grid-column: 1 / -1;
+        grid-row: 3;
+    }
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
     .main-content { grid-template-columns: 1fr; }
     .status-bar { flex-direction: column; gap: 10px; }
-    .stats-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
     .logs-header, .digits-header { flex-direction: column; gap: 10px; align-items: flex-start; }
+    .form-row { grid-template-columns: 1fr; }
+    .stats-panel {
+        grid-column: 1;
+        grid-row: auto;
+    }
 }
 </style>
 </head>
@@ -282,7 +337,7 @@ body {
 <div class="container">
     <div class="header">
         <h1>Deriv Trading Bot</h1>
-        <p>Estratégia: Volatilidade 10 - 5 Pares + Dígito Ímpar</p>
+        <p>Estratégia: Volatilidade 10 - Configurações Dinâmicas</p>
     </div>
 
     <div class="status-bar">
@@ -293,6 +348,10 @@ body {
         <div class="status-item">
             <div class="status-label">Lucro/Prejuízo</div>
             <div class="status-value" id="profit">$0.00</div>
+        </div>
+        <div class="status-item">
+            <div class="status-label">Meta de Lucro</div>
+            <div class="status-value" id="profitGoalDisplay">Desabilitado</div>
         </div>
         <div class="status-item">
             <div class="status-label">Trades</div>
@@ -315,51 +374,83 @@ body {
             <button class="btn btn-primary" onclick="connectBot()">Conectar</button>
             <button class="btn btn-success" onclick="startBot()" id="startBtn" disabled>Iniciar Bot</button>
             <button class="btn btn-warning" onclick="stopBot()" id="stopBtn" disabled>Pausar Bot</button>
-        </div>
-
-        <div class="panel">
-            <h3>Configurações</h3>
-            <div class="form-group">
-                <label for="baseStake">Stake Inicial ($):</label>
-                <input type="number" id="baseStake" value="1" min="0.35" step="0.01">
-            </div>
-            <div class="form-group">
-                <label for="multiplier">Multiplicador Martingale:</label>
-                <input type="number" id="multiplier" value="2.2" min="1.1" step="0.1">
-            </div>
-            <div class="form-group">
-                <label for="maxMartingale">Máx. Martingales:</label>
-                <input type="number" id="maxMartingale" value="5" min="1" max="10">
-            </div>
-            <button class="btn btn-primary" onclick="updateConfig()">Atualizar Configurações</button>
-            <button class="btn btn-danger" onclick="resetStats()">Reset Estatísticas</button>
-        </div>
-
-        <div class="panel digits-panel">
-            <div class="digits-header">
-                <h3>Últimos Dígitos</h3>
-                <button class="btn-clear-digits" onclick="clearDigits()">Limpar Dígitos</button>
-            </div>
-            <div class="digits-display" id="digitsDisplay"></div>
-        </div>
-
-        <div class="panel">
-            <h3>Status Atual</h3>
+            
+            <h3 style="margin-top: 30px;">Status Atual</h3>
             <div class="form-group">
                 <label>Aguardando Pares:</label>
-                <div id="pairsCount">0/5</div>
+                <div id="pairsCount">0/6</div>
+            </div>
+            <div class="form-group">
+                <label>Aguardando Ímpares:</label>
+                <div id="imparesCount">0/6</div>
             </div>
             <div class="form-group">
                 <label>Próximo Stake:</label>
-                <div id="currentStake">$1.00</div>
+                <div id="currentStake">$0.35</div>
             </div>
             <div class="form-group">
                 <label>Martingale:</label>
-                <div id="martingaleCount">0/5</div>
+                <div id="martingaleCount">0/8</div>
             </div>
         </div>
 
-        <div class="panel">
+        <div class="panel config-panel">
+            <h3>Configurações da Estratégia</h3>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="baseStake">Stake Inicial ($):</label>
+                    <input type="number" id="baseStake" value="0.35" min="0.35" step="0.01">
+                    <div class="input-help">Mínimo: $0.35</div>
+                </div>
+                <div class="form-group">
+                    <label for="multiplier">Multiplicador Martingale:</label>
+                    <input type="number" id="multiplier" value="2.2" min="1.1" step="0.1">
+                    <div class="input-help">Mínimo: 1.1</div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="maxMartingale">Máx. Martingales:</label>
+                    <input type="number" id="maxMartingale" value="8" min="1" max="15">
+                    <div class="input-help">Entre 1 e 15</div>
+                </div>
+                <div class="form-group">
+                    <label for="payout">Payout da Estratégia:</label>
+                    <input type="number" id="payout" value="0.95" min="0.1" max="5.0" step="0.01">
+                    <div class="input-help">Entre 0.1 e 5.0</div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="minPairs">Mín. Dígitos Pares:</label>
+                    <input type="number" id="minPairs" value="6" min="1" max="20">
+                    <div class="input-help">Entre 1 e 20</div>
+                </div>
+                <div class="form-group">
+                    <label for="minImpares">Mín. Dígitos Ímpares:</label>
+                    <input type="number" id="minImpares" value="6" min="1" max="20">
+                    <div class="input-help">Entre 1 e 20</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="profitGoal">Meta de Lucro ($):</label>
+                <div class="profit-goal-container">
+                    <input type="checkbox" id="profitGoalEnabled" onchange="toggleProfitGoal()">
+                    <span>Habilitar Meta</span>
+                    <input type="number" id="profitGoal" value="10.00" min="0.01" step="0.01">
+                </div>
+                <div class="input-help">Bot parará automaticamente ao atingir a meta</div>
+            </div>
+
+            <button class="btn btn-primary" onclick="updateConfig()">💾 Salvar Configurações</button>
+            <button class="btn btn-danger" onclick="resetStats()">🔄 Reset Estatísticas</button>
+        </div>
+
+        <div class="panel stats-panel">
             <h3>Estatísticas</h3>
             <div class="stats-grid">
                 <div class="stat-card">
@@ -370,7 +461,23 @@ body {
                     <div class="stat-number" id="lossesCount">0</div>
                     <div class="stat-label">Derrotas</div>
                 </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="totalTradesStats">0</div>
+                    <div class="stat-label">Total Trades</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number" id="winRateStats">0%</div>
+                    <div class="stat-label">Win Rate</div>
+                </div>
             </div>
+        </div>
+
+        <div class="panel digits-panel">
+            <div class="digits-header">
+                <h3>Últimos Dígitos</h3>
+                <button class="btn-clear-digits" onclick="clearDigits()">Limpar Dígitos</button>
+            </div>
+            <div class="digits-display" id="digitsDisplay"></div>
         </div>
 
         <div class="logs-container">
@@ -386,17 +493,33 @@ body {
 <script>
 const socket = io();
 let botState = {};
+let currentConfig = {};
 
+// Receber atualizações do estado do bot
 socket.on('botStateUpdate', (state) => {
     botState = state;
     updateInterface();
 });
 
+// Receber atualizações das configurações
+socket.on('configUpdate', (config) => {
+    currentConfig = config;
+    updateConfigInterface();
+    updateInterface(); // Atualizar também a interface principal para refletir a meta na barra superior
+});
+
+// Receber novos logs
 socket.on('newLog', (log) => {
     addLogToInterface(log);
 });
 
+// Solicitar configurações ao conectar
+socket.on('connect', () => {
+    socket.emit('get_config');
+});
+
 function updateInterface() {
+    // Status de conexão
     const statusEl = document.getElementById('connectionStatus');
     if (botState.connected) {
         statusEl.textContent = 'Conectado ✅';
@@ -410,25 +533,45 @@ function updateInterface() {
         document.getElementById('stopBtn').disabled = true;
     }
 
-    document.getElementById('balance').textContent = `$${botState.balance.toFixed(2)}`;
+    // Saldo
+    document.getElementById('balance').textContent = `$${(botState.balance || 0).toFixed(2)}`;
 
+    // Lucro/Prejuízo
     const profitEl = document.getElementById('profit');
-    profitEl.textContent = `$${botState.stats.profit.toFixed(2)}`;
-    profitEl.className = botState.stats.profit >= 0 ? 'status-value positive' : 'status-value negative';
+    const profit = botState.stats?.profit || 0;
+    profitEl.textContent = `$${profit.toFixed(2)}`;
+    profitEl.className = profit >= 0 ? 'status-value positive' : 'status-value negative';
 
-    document.getElementById('totalTrades').textContent = botState.stats.totalTrades;
-    document.getElementById('winsCount').textContent = botState.stats.wins;
-    document.getElementById('lossesCount').textContent = botState.stats.losses;
+    // Meta de lucro na barra superior
+    const profitGoalDisplayEl = document.getElementById('profitGoalDisplay');
+    if (currentConfig.profitGoal && currentConfig.profitGoal > 0) {
+        profitGoalDisplayEl.textContent = `${currentConfig.profitGoal.toFixed(2)}`;
+        profitGoalDisplayEl.className = 'status-value';
+    } else {
+        profitGoalDisplayEl.textContent = 'Desabilitado';
+        profitGoalDisplayEl.className = 'status-value';
+    }
 
-    const winRate = botState.stats.totalTrades > 0 
-        ? ((botState.stats.wins / botState.stats.totalTrades) * 100).toFixed(1)
-        : 0;
+    // Estatísticas na barra superior
+    document.getElementById('totalTrades').textContent = botState.stats?.totalTrades || 0;
+    const totalTrades = botState.stats?.totalTrades || 0;
+    const wins = botState.stats?.wins || 0;
+    const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : 0;
     document.getElementById('winRate').textContent = `${winRate}%`;
 
-    document.getElementById('pairsCount').textContent = `${botState.waitingForPairs}/5`;
-    document.getElementById('currentStake').textContent = `$${botState.currentStake.toFixed(2)}`;
-    document.getElementById('martingaleCount').textContent = `${botState.martingaleCount}/${botState.maxMartingale || 5}`;
+    // Estatísticas no painel expandido
+    document.getElementById('winsCount').textContent = botState.stats?.wins || 0;
+    document.getElementById('lossesCount').textContent = botState.stats?.losses || 0;
+    document.getElementById('totalTradesStats').textContent = botState.stats?.totalTrades || 0;
+    document.getElementById('winRateStats').textContent = `${winRate}%`;
 
+    // Status atual
+    document.getElementById('pairsCount').textContent = `${botState.waitingForPairs || 0}/${currentConfig.minPairs || 6}`;
+    document.getElementById('imparesCount').textContent = `${botState.waitingForImpares || 0}/${currentConfig.minImpares || 6}`;
+    document.getElementById('currentStake').textContent = `$${(botState.currentStake || 0).toFixed(2)}`;
+    document.getElementById('martingaleCount').textContent = `${botState.martingaleCount || 0}/${currentConfig.maxMartingale || 8}`;
+
+    // Dígitos
     const digitsContainer = document.getElementById('digitsDisplay');
     digitsContainer.innerHTML = '';
     if (botState.lastDigits && botState.lastDigits.length > 0) {
@@ -441,6 +584,26 @@ function updateInterface() {
     }
 }
 
+function updateConfigInterface() {
+    // Atualizar campos de configuração com valores do servidor
+    document.getElementById('baseStake').value = currentConfig.baseStake || 0.35;
+    document.getElementById('multiplier').value = currentConfig.multiplier || 2.2;
+    document.getElementById('maxMartingale').value = currentConfig.maxMartingale || 8;
+    document.getElementById('payout').value = currentConfig.payout || 0.95;
+    document.getElementById('minPairs').value = currentConfig.minPairs || 6;
+    document.getElementById('minImpares').value = currentConfig.minImpares || 6;
+    
+    // Meta de lucro
+    const profitGoalEnabled = currentConfig.profitGoal && currentConfig.profitGoal > 0;
+    document.getElementById('profitGoalEnabled').checked = profitGoalEnabled;
+    document.getElementById('profitGoal').disabled = !profitGoalEnabled;
+    
+    // Usar o valor do servidor se existir, senão manter o valor atual do campo
+    if (currentConfig.profitGoal !== undefined) {
+        document.getElementById('profitGoal').value = currentConfig.profitGoal > 0 ? currentConfig.profitGoal.toFixed(2) : '10.00';
+    }
+}
+
 function addLogToInterface(log) {
     const logsContainer = document.getElementById('logsContainer');
     const logEl = document.createElement('div');
@@ -448,34 +611,101 @@ function addLogToInterface(log) {
     logEl.innerHTML = `<strong>${log.timestamp}</strong> - ${log.message}`;
     logsContainer.insertBefore(logEl, logsContainer.firstChild);
 
+    // Manter apenas os últimos 50 logs
     while (logsContainer.children.length > 50) {
         logsContainer.removeChild(logsContainer.lastChild);
     }
 }
 
-function clearLogs() { document.getElementById('logsContainer').innerHTML = ''; }
-function clearDigits() { socket.emit('clear_digits'); }
+function toggleProfitGoal() {
+    const checkbox = document.getElementById('profitGoalEnabled');
+    const input = document.getElementById('profitGoal');
+    input.disabled = !checkbox.checked;
+}
+
+function clearLogs() {
+    document.getElementById('logsContainer').innerHTML = '';
+}
+
+function clearDigits() {
+    socket.emit('clear_digits');
+}
+
 function connectBot() {
     const token = document.getElementById('apiToken').value;
-    if (!token) { alert('Por favor, insira o token da API'); return; }
+    if (!token) {
+        alert('Por favor, insira o token da API');
+        return;
+    }
     socket.emit('connect_bot', token);
 }
-function startBot() { socket.emit('start_bot'); }
-function stopBot() { socket.emit('stop_bot'); }
+
+function startBot() {
+    socket.emit('start_bot');
+}
+
+function stopBot() {
+    socket.emit('stop_bot');
+}
+
 function updateConfig() {
+    const baseStake = parseFloat(document.getElementById('baseStake').value);
+    const multiplier = parseFloat(document.getElementById('multiplier').value);
+    const maxMartingale = parseInt(document.getElementById('maxMartingale').value);
+    const payout = parseFloat(document.getElementById('payout').value);
+    const minPairs = parseInt(document.getElementById('minPairs').value);
+    const minImpares = parseInt(document.getElementById('minImpares').value);
+    const profitGoalEnabled = document.getElementById('profitGoalEnabled').checked;
+    const profitGoal = profitGoalEnabled ? parseFloat(document.getElementById('profitGoal').value) : 0;
+
+    console.log('Enviando configuração:', { profitGoal, profitGoalEnabled }); // Debug
+
+    // Validações básicas no frontend
+    if (baseStake < 0.35) {
+        alert('Stake inicial deve ser no mínimo $0.35');
+        return;
+    }
+    if (multiplier < 1.1) {
+        alert('Multiplicador deve ser no mínimo 1.1');
+        return;
+    }
+    if (payout < 0.1 || payout > 5.0) {
+        alert('Payout deve estar entre 0.1 e 5.0');
+        return;
+    }
+    if (minPairs < 1 || minPairs > 20) {
+        alert('Mínimo de pares deve estar entre 1 e 20');
+        return;
+    }
+    if (minImpares < 1 || minImpares > 20) {
+        alert('Mínimo de ímpares deve estar entre 1 e 20');
+        return;
+    }
+    if (profitGoalEnabled && profitGoal <= 0) {
+        alert('Meta de lucro deve ser maior que 0 quando habilitada');
+        return;
+    }
+
     const config = {
-        baseStake: document.getElementById('baseStake').value,
-        multiplier: document.getElementById('multiplier').value,
-        maxMartingale: document.getElementById('maxMartingale').value
+        baseStake,
+        multiplier,
+        maxMartingale,
+        payout,
+        minPairs,
+        minImpares,
+        profitGoal
     };
+
     socket.emit('update_config', config);
 }
+
 function resetStats() {
     if (confirm('Tem certeza que deseja resetar todas as estatísticas?')) {
         socket.emit('reset_stats');
     }
 }
 
+// Inicialização
 updateInterface();
 </script>
 </body>
