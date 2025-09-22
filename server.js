@@ -97,7 +97,7 @@ function updateSequenceStats(digit) {
     if (sequenceStats.currentImparesSequence > 0) {
       const count = sequenceStats.currentImparesSequence;
       sequenceStats.impares[count] = (sequenceStats.impares[count] || 0) + 1;
-      log(`Sequência de ${count} ímpares finalizada. Total registrado: ${sequenceStats.impares[count]} vezes`);
+      // log(`Sequência de ${count} ímpares finalizada. Total registrado: ${sequenceStats.impares[count]} vezes`);
       sequenceStats.currentImparesSequence = 0;
     }
   } else {
@@ -108,7 +108,7 @@ function updateSequenceStats(digit) {
     if (sequenceStats.currentParesSequence > 0) {
       const count = sequenceStats.currentParesSequence;
       sequenceStats.pares[count] = (sequenceStats.pares[count] || 0) + 1;
-      log(`Sequência de ${count} pares finalizada. Total registrado: ${sequenceStats.pares[count]} vezes`);
+      // log(`Sequência de ${count} pares finalizada. Total registrado: ${sequenceStats.pares[count]} vezes`);
       sequenceStats.currentParesSequence = 0;
     }
   }
@@ -179,7 +179,7 @@ function ensureValidNumber(value, defaultValue = 1.0) {
 function checkProfitGoal() {
   if (config.profitGoal > 0 && botState.stats.profit >= config.profitGoal) {
     botState.isRunning = false;
-    log(`🎯 Meta de lucro atingida! Lucro atual: $${botState.stats.profit.toFixed(2)} | Meta: $${config.profitGoal.toFixed(2)}`, "success");
+    log(`Meta de lucro atingida! Lucro atual: $${botState.stats.profit.toFixed(2)} | Meta: $${config.profitGoal.toFixed(2)}`, "success");
     io.emit("botStateUpdate", botState);
     return true;
   }
@@ -270,7 +270,7 @@ function handleAPIResponse(response) {
 }
 
 // =========================
-// TICKS E RESULTADOS
+// TICKS E RESULTADOS - ESTRATÉGIA CORRIGIDA
 // =========================
 function handleTick(tick) {
   if (!botState.isRunning) return;
@@ -300,9 +300,14 @@ function handleTick(tick) {
 
       if (isWin) {
         botState.stats.wins++;
+        // WIN: Reset completo - volta ao estado inicial
         botState.martingaleCount = 0;
         botState.currentStake = config.baseStake;
-        log(`Trade #${trade.id} WIN | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | +${profit.toFixed(2)}`);
+        botState.waitingForPairs = 0;
+        botState.waitingForImpares = 0;
+        botState.makingEntry = false;
+        
+        log(`Trade #${trade.id} WIN | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | +${profit.toFixed(2)} | Reset completo`);
         
         // Verificar meta de lucro após win
         if (checkProfitGoal()) {
@@ -315,38 +320,72 @@ function handleTick(tick) {
           botState.martingaleCount++;
           botState.currentStake *= config.multiplier;
           botState.currentStake = parseFloat(botState.currentStake.toFixed(2));
-          log(`Trade #${trade.id} LOSS | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | ${profit.toFixed(2)} | Gale ${botState.martingaleCount}/${config.maxMartingale}`, "warning");
+          log(`Trade #${trade.id} LOSS | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | ${profit.toFixed(2)} | Preparando Gale ${botState.martingaleCount}/${config.maxMartingale}`, "error");
+          
+          // No martingale, vai fazer entrada IMEDIATAMENTE no próximo tick,
+          // independente de sequência, mantendo o mesmo tipo de entrada (par/ímpar)
         } else {
           botState.martingaleCount = 0;
           botState.currentStake = config.baseStake;
+          botState.waitingForPairs = 0;
+          botState.waitingForImpares = 0;
           botState.isRunning = false;
-          log(`⚠️ Gale máximo atingido. Bot parado. Revise a estratégia ou reinicie.`, "warning");
+          log(`Gale máximo atingido. Bot parado. Revise a estratégia ou reinicie.`, "error");
         }
       }
       io.emit("tradeResult", trade);
     }
   }
 
-  // Estratégia: entrada ímpar após pares consecutivos
-  if (lastDigit % 2 === 0) {
-    botState.waitingForPairs++;
-    botState.waitingForImpares = 0;
-    log(`Digit par detectado (${botState.waitingForPairs}/${config.minPairs})`);
-
-    if (botState.waitingForPairs >= config.minPares || botState.martingaleCount > 0) {
-      makeEntryAsync(lastDigit, "DIGITODD");
-      botState.waitingForPairs = 0;
+  // LÓGICA DE ENTRADA CORRIGIDA
+  // Se está em martingale, faz entrada imediata mantendo a mesma estratégia
+  if (botState.martingaleCount > 0) {
+    // Determinar qual foi a estratégia anterior baseada nos contadores
+    let shouldMakeEntry = false;
+    let entryType = "";
+    
+    if (botState.waitingForPairs > 0 || (botState.waitingForPairs === 0 && botState.waitingForImpares === 0 && lastDigit % 2 === 0)) {
+      // Estava/está esperando pares para apostar em ímpar
+      entryType = "DIGITODD";
+      shouldMakeEntry = true;
+      log(`Martingale ${botState.martingaleCount}: Entrada ÍMPAR (continuando estratégia)`, "warning");
+    } else if (botState.waitingForImpares > 0 || (botState.waitingForPairs === 0 && botState.waitingForImpares === 0 && lastDigit % 2 === 1)) {
+      // Estava/está esperando ímpares para apostar em par
+      entryType = "DIGITEVEN";
+      shouldMakeEntry = true;
+      log(`Martingale ${botState.martingaleCount}: Entrada PAR (continuando estratégia)`, "warning");
+    }
+    
+    if (shouldMakeEntry) {
+      makeEntryAsync(lastDigit, entryType);
+      return; // Sai da função para não processar a lógica de contagem normal
     }
   }
-  // Estratégia: entrada par após ímpares consecutivos
-  else {
-    botState.waitingForImpares++;
-    botState.waitingForPairs = 0;
-    log(`Digit ímpar detectado (${botState.waitingForImpares}/${config.minImpares})`);
 
-    if (botState.waitingForImpares >= config.minImpares || botState.martingaleCount > 0) {
+  // LÓGICA NORMAL (não está em martingale)
+  if (lastDigit % 2 === 0) {
+    // Dígito PAR - conta para sequência de pares
+    botState.waitingForPairs++;
+    botState.waitingForImpares = 0; // Reset contador de ímpares
+    log(`Par detectado: ${lastDigit} (${botState.waitingForPairs}/${config.minPairs} pares consecutivos)`);
+
+    // Se atingiu a quantidade configurada de pares, apostar em ÍMPAR
+    if (botState.waitingForPairs >= config.minPairs) {
+      // log(`Sequência de ${config.minPairs} pares atingida! Fazendo entrada em ÍMPAR`);
+      makeEntryAsync(lastDigit, "DIGITODD");
+      // NÃO resetamos os contadores aqui - só resetam quando WIN ou após gale máximo
+    }
+  } else {
+    // Dígito ÍMPAR - conta para sequência de ímpares
+    botState.waitingForImpares++;
+    botState.waitingForPairs = 0; // Reset contador de pares
+    log(`Ímpar detectado: ${lastDigit} (${botState.waitingForImpares}/${config.minImpares} ímpares consecutivos)`);
+
+    // Se atingiu a quantidade configurada de ímpares, apostar em PAR
+    if (botState.waitingForImpares >= config.minImpares) {
+      // log(`Sequência de ${config.minImpares} ímpares atingida! Fazendo entrada em PAR`);
       makeEntryAsync(lastDigit, "DIGITEVEN");
-      botState.waitingForImpares = 0;
+      // NÃO resetamos os contadores aqui - só resetam quando WIN ou após gale máximo
     }
   }
 
@@ -362,7 +401,7 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD") {
   botState.currentStake = parseFloat(ensureValidNumber(botState.currentStake, config.baseStake).toFixed(2));
   if (botState.currentStake > botState.balance) {
     botState.isRunning = false;
-    log("⚠️ Saldo insuficiente. Bot parado.", "warning");
+    log("Saldo insuficiente. Bot parado.", "error");
     return;
   }
 
@@ -395,7 +434,7 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD") {
   }
 
   io.emit("tradePending", localTrades[id]);
-  log(`Trade #${id} lançado | Entrada ${entryType} no dígito: ${lastDigit} | Stake: ${botState.currentStake}`);
+  log(`Trade #${id} lançado | Entrada ${entryType} após dígito: ${lastDigit} | Stake: ${botState.currentStake}`);
 }
 
 // =========================
