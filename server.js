@@ -53,15 +53,116 @@ let tradeCounter = 0;
 // =========================
 // LOGS
 // =========================
+let systemLogs = []; // Array para armazenar todos os logs
+
 function log(message, type = "info") {
   const logObj = {
     message,
     type,
     category: "general",
     timestamp: new Date().toLocaleTimeString(),
+    fullTimestamp: new Date().toISOString(),
   };
+  
+  // Armazenar no array de logs
+  systemLogs.push(logObj);
+  
+  // Manter apenas os últimos 1000 logs na memória
+  if (systemLogs.length > 1000) {
+    systemLogs.shift();
+  }
+  
   console.log(`[${type.toUpperCase()}] ${message}`);
   io.emit("newLog", logObj);
+}
+
+// =========================
+// RASTREAMENTO DE SEQUÊNCIAS
+// =========================
+let sequenceStats = {
+  pares: {}, // {2: 4, 3: 2, 4: 1} significa: 2 pares consecutivos aconteceu 4 vezes
+  impares: {},
+  currentParesSequence: 0,
+  currentImparesSequence: 0
+};
+
+function updateSequenceStats(digit) {
+  const isEven = digit % 2 === 0;
+  
+  if (isEven) {
+    // Se for par
+    sequenceStats.currentParesSequence++;
+    
+    // Se tinha sequência de ímpares, finaliza e conta
+    if (sequenceStats.currentImparesSequence > 0) {
+      const count = sequenceStats.currentImparesSequence;
+      sequenceStats.impares[count] = (sequenceStats.impares[count] || 0) + 1;
+      log(`Sequência de ${count} ímpares finalizada. Total registrado: ${sequenceStats.impares[count]} vezes`);
+      sequenceStats.currentImparesSequence = 0;
+    }
+  } else {
+    // Se for ímpar
+    sequenceStats.currentImparesSequence++;
+    
+    // Se tinha sequência de pares, finaliza e conta
+    if (sequenceStats.currentParesSequence > 0) {
+      const count = sequenceStats.currentParesSequence;
+      sequenceStats.pares[count] = (sequenceStats.pares[count] || 0) + 1;
+      log(`Sequência de ${count} pares finalizada. Total registrado: ${sequenceStats.pares[count]} vezes`);
+      sequenceStats.currentParesSequence = 0;
+    }
+  }
+}
+
+function generateSequenceReport() {
+  let report = "=== RELATÓRIO DE SEQUÊNCIAS ===\n";
+  report += `Gerado em: ${new Date().toLocaleString('pt-BR')}\n\n`;
+  
+  report += "SEQUÊNCIAS DE DÍGITOS PARES:\n";
+  const paresKeys = Object.keys(sequenceStats.pares).sort((a, b) => parseInt(a) - parseInt(b));
+  if (paresKeys.length === 0) {
+    report += "Nenhuma sequência de pares registrada ainda.\n";
+  } else {
+    paresKeys.forEach(length => {
+      report += `${length} pares consecutivos: ${sequenceStats.pares[length]} vezes\n`;
+    });
+  }
+  
+  report += "\nSEQUÊNCIAS DE DÍGITOS ÍMPARES:\n";
+  const imparesKeys = Object.keys(sequenceStats.impares).sort((a, b) => parseInt(a) - parseInt(b));
+  if (imparesKeys.length === 0) {
+    report += "Nenhuma sequência de ímpares registrada ainda.\n";
+  } else {
+    imparesKeys.forEach(length => {
+      report += `${length} ímpares consecutivos: ${sequenceStats.impares[length]} vezes\n`;
+    });
+  }
+  
+  report += "\nSEQUÊNCIAS ATUAIS EM ANDAMENTO:\n";
+  if (sequenceStats.currentParesSequence > 0) {
+    report += `Pares em andamento: ${sequenceStats.currentParesSequence} consecutivos\n`;
+  }
+  if (sequenceStats.currentImparesSequence > 0) {
+    report += `Ímpares em andamento: ${sequenceStats.currentImparesSequence} consecutivos\n`;
+  }
+  if (sequenceStats.currentParesSequence === 0 && sequenceStats.currentImparesSequence === 0) {
+    report += "Nenhuma sequência em andamento no momento.\n";
+  }
+  
+  return report;
+}
+
+function generateFullLogReport() {
+  let report = "=== RELATÓRIO COMPLETO DE LOGS ===\n";
+  report += `Gerado em: ${new Date().toLocaleString('pt-BR')}\n`;
+  report += `Total de logs: ${systemLogs.length}\n\n`;
+  
+  systemLogs.forEach(logEntry => {
+    const timestamp = new Date(logEntry.fullTimestamp).toLocaleString('pt-BR');
+    report += `[${logEntry.type.toUpperCase()}] ${timestamp} - ${logEntry.message}\n`;
+  });
+  
+  return report;
 }
 
 // =========================
@@ -180,6 +281,9 @@ function handleTick(tick) {
   botState.lastDigits.push(lastDigit);
   if (botState.lastDigits.length > 20) botState.lastDigits.shift();
 
+  // Atualizar estatísticas de sequência
+  updateSequenceStats(lastDigit);
+
   // Resolver trades abertos
   for (let id in localTrades) {
     const trade = localTrades[id];
@@ -229,7 +333,7 @@ function handleTick(tick) {
     botState.waitingForImpares = 0;
     log(`Digit par detectado (${botState.waitingForPairs}/${config.minPairs})`);
 
-    if (botState.waitingForPairs >= config.minPairs || botState.martingaleCount > 0) {
+    if (botState.waitingForPairs >= config.minPares || botState.martingaleCount > 0) {
       makeEntryAsync(lastDigit, "DIGITODD");
       botState.waitingForPairs = 0;
     }
@@ -388,6 +492,15 @@ io.on("connection", (socket) => {
     botState.makingEntry = false;
     localTrades = {};
     tradeCounter = 0;
+    
+    // Resetar também as estatísticas de sequência
+    sequenceStats = {
+      pares: {},
+      impares: {},
+      currentParesSequence: 0,
+      currentImparesSequence: 0
+    };
+    
     log("Estatísticas resetadas");
     io.emit("botStateUpdate", botState);
   });
@@ -400,6 +513,25 @@ io.on("connection", (socket) => {
 
   socket.on("get_config", () => {
     socket.emit("configUpdate", config);
+  });
+
+  // Novos eventos para download de relatórios
+  socket.on("download_full_log", () => {
+    const report = generateFullLogReport();
+    socket.emit("downloadFile", {
+      filename: `logs_completos_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`,
+      content: report,
+      type: "text/plain"
+    });
+  });
+
+  socket.on("download_sequence_report", () => {
+    const report = generateSequenceReport();
+    socket.emit("downloadFile", {
+      filename: `relatorio_sequencias_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`,
+      content: report,
+      type: "text/plain"
+    });
   });
 });
 

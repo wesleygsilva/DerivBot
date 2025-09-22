@@ -157,6 +157,7 @@ body {
 .btn-warning { background: #ffc107; color: #333; }
 .btn-danger { background: #dc3545; color: #fff; }
 .btn-secondary { background: #6c757d; color: #fff; }
+.btn-info { background: #17a2b8; color: #fff; }
 
 .btn:disabled {
     opacity: 0.4;
@@ -199,6 +200,8 @@ body {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .logs-header h3, .digits-header h3 {
@@ -221,6 +224,28 @@ body {
 
 .btn-clear-logs:hover, .btn-clear-digits:hover {
     background: #5a6268;
+}
+
+.download-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn-download {
+    background: #17a2b8;
+    color: white;
+    padding: 8px 16px;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-download:hover {
+    background: #138496;
+    transform: translateY(-1px);
 }
 
 .log-entry {
@@ -329,6 +354,9 @@ body {
     .stats-panel {
         grid-column: 1;
         grid-row: auto;
+    }
+    .download-buttons {
+        justify-content: flex-start;
     }
 }
 </style>
@@ -483,7 +511,11 @@ body {
         <div class="logs-container">
             <div class="logs-header">
                 <h3>Logs do Sistema</h3>
-                <button class="btn-clear-logs" onclick="clearLogs()">Limpar Logs</button>
+                <div class="download-buttons">
+                    <button class="btn-download" onclick="downloadFullLog()">📄 Download Logs</button>
+                    <button class="btn-download" onclick="downloadSequenceReport()">📊 Download Sequências</button>
+                    <button class="btn-clear-logs" onclick="clearLogs()">Limpar Logs</button>
+                </div>
             </div>
             <div id="logsContainer"></div>
         </div>
@@ -511,6 +543,11 @@ socket.on('configUpdate', (config) => {
 // Receber novos logs
 socket.on('newLog', (log) => {
     addLogToInterface(log);
+});
+
+// Receber arquivo para download
+socket.on('downloadFile', (fileData) => {
+    downloadFile(fileData.filename, fileData.content, fileData.type);
 });
 
 // Solicitar configurações ao conectar
@@ -658,8 +695,6 @@ function updateConfig() {
     const profitGoalEnabled = document.getElementById('profitGoalEnabled').checked;
     const profitGoal = profitGoalEnabled ? parseFloat(document.getElementById('profitGoal').value) : 0;
 
-    console.log('Enviando configuração:', { profitGoal, profitGoalEnabled }); // Debug
-
     // Validações básicas no frontend
     if (baseStake < 0.35) {
         alert('Stake inicial deve ser no mínimo $0.35');
@@ -703,6 +738,28 @@ function resetStats() {
     if (confirm('Tem certeza que deseja resetar todas as estatísticas?')) {
         socket.emit('reset_stats');
     }
+}
+
+// Função para fazer download de arquivo
+function downloadFile(filename, content, mimeType) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+}
+
+// Funções para download dos relatórios
+function downloadFullLog() {
+    socket.emit('download_full_log');
+}
+
+function downloadSequenceReport() {
+    socket.emit('download_sequence_report');
 }
 
 // Inicialização
