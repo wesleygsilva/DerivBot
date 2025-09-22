@@ -406,11 +406,11 @@ body {
             <h3 style="margin-top: 30px;">Status Atual</h3>
             <div class="form-group">
                 <label>Aguardando Pares:</label>
-                <div id="pairsCount">0/6</div>
+                <div id="EvenCount">0/6</div>
             </div>
             <div class="form-group">
                 <label>Aguardando Ímpares:</label>
-                <div id="imparesCount">0/6</div>
+                <div id="OddCount">0/6</div>
             </div>
             <div class="form-group">
                 <label>Próximo Stake:</label>
@@ -453,13 +453,13 @@ body {
 
             <div class="form-row">
                 <div class="form-group">
-                    <label for="minPairs">Mín. Dígitos Pares:</label>
-                    <input type="number" id="minPairs" value="6" min="1" max="20">
+                    <label for="minEven">Mín. Dígitos Pares:</label>
+                    <input type="number" id="minEven" value="6" min="1" max="20">
                     <div class="input-help">Entre 1 e 20</div>
                 </div>
                 <div class="form-group">
-                    <label for="minImpares">Mín. Dígitos Ímpares:</label>
-                    <input type="number" id="minImpares" value="6" min="1" max="20">
+                    <label for="minOdd">Mín. Dígitos Ímpares:</label>
+                    <input type="number" id="minOdd" value="6" min="1" max="20">
                     <div class="input-help">Entre 1 e 20</div>
                 </div>
             </div>
@@ -603,8 +603,8 @@ function updateInterface() {
     document.getElementById('winRateStats').textContent = `${winRate}%`;
 
     // Status atual
-    document.getElementById('pairsCount').textContent = `${botState.waitingForPairs || 0}/${currentConfig.minPairs || 6}`;
-    document.getElementById('imparesCount').textContent = `${botState.waitingForImpares || 0}/${currentConfig.minImpares || 6}`;
+    document.getElementById('EvenCount').textContent = `${botState.waitingForEven || 0}/${currentConfig.minEven || 6}`;
+    document.getElementById('OddCount').textContent = `${botState.waitingForOdd || 0}/${currentConfig.minOdd || 6}`;
     document.getElementById('currentStake').textContent = `$${(botState.currentStake || 0).toFixed(2)}`;
     document.getElementById('martingaleCount').textContent = `${botState.martingaleCount || 0}/${currentConfig.maxMartingale || 8}`;
 
@@ -627,8 +627,8 @@ function updateConfigInterface() {
     document.getElementById('multiplier').value = currentConfig.multiplier || 2.2;
     document.getElementById('maxMartingale').value = currentConfig.maxMartingale || 8;
     document.getElementById('payout').value = currentConfig.payout || 0.95;
-    document.getElementById('minPairs').value = currentConfig.minPairs || 6;
-    document.getElementById('minImpares').value = currentConfig.minImpares || 6;
+    document.getElementById('minEven').value = currentConfig.minEven || 6;
+    document.getElementById('minOdd').value = currentConfig.minOdd || 6;
     
     // Meta de lucro
     const profitGoalEnabled = currentConfig.profitGoal && currentConfig.profitGoal > 0;
@@ -690,8 +690,8 @@ function updateConfig() {
     const multiplier = parseFloat(document.getElementById('multiplier').value);
     const maxMartingale = parseInt(document.getElementById('maxMartingale').value);
     const payout = parseFloat(document.getElementById('payout').value);
-    const minPairs = parseInt(document.getElementById('minPairs').value);
-    const minImpares = parseInt(document.getElementById('minImpares').value);
+    const minEven = parseInt(document.getElementById('minEven').value);
+    const minOdd = parseInt(document.getElementById('minOdd').value);
     const profitGoalEnabled = document.getElementById('profitGoalEnabled').checked;
     const profitGoal = profitGoalEnabled ? parseFloat(document.getElementById('profitGoal').value) : 0;
 
@@ -708,11 +708,11 @@ function updateConfig() {
         alert('Payout deve estar entre 0.1 e 5.0');
         return;
     }
-    if (minPairs < 1 || minPairs > 20) {
+    if (minEven < 1 || minEven > 20) {
         alert('Mínimo de pares deve estar entre 1 e 20');
         return;
     }
-    if (minImpares < 1 || minImpares > 20) {
+    if (minOdd < 1 || minOdd > 20) {
         alert('Mínimo de ímpares deve estar entre 1 e 20');
         return;
     }
@@ -726,8 +726,8 @@ function updateConfig() {
         multiplier,
         maxMartingale,
         payout,
-        minPairs,
-        minImpares,
+        minEven,
+        minOdd,
         profitGoal
     };
 

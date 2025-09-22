@@ -3,6 +3,12 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 
+// Importar estratégias
+const EvenOddStrategy = require("./strategies/EvenOdd");
+const SequenceTracker = require("./utils/SequenceTracker");
+const Logger = require("./utils/Logger");
+const DerivAPI = require("./api/DerivAPI");
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -16,6 +22,7 @@ app.use(express.static(__dirname + "/public"));
 // CONFIG - Agora todas as configurações são dinâmicas
 // =========================
 let config = {
+  strategy: "EvenOdd", // nova propriedade para selecionar estratégia
   contract_type: "DIGITODD",
   duration: 1,
   symbol: "1HZ10V",
@@ -23,9 +30,9 @@ let config = {
   multiplier: 2.2,
   maxMartingale: 8,
   payout: 0.95,
-  minPairs: 6,
-  minImpares: 6,
-  profitGoal: 0,  // Meta de lucro (0 = desabilitado)
+  minEven: 6,
+  minOdd: 6,
+  profitGoal: 0,
 };
 
 // =========================
@@ -36,134 +43,30 @@ let botState = {
   isRunning: false,
   makingEntry: false,
   lastDigits: [],
-  waitingForPairs: 0,
-  waitingForImpares: 0,
-  martingaleCount: 0,
-  currentStake: config.baseStake,
   balance: 0,
   stats: { profit: 0, totalTrades: 0, wins: 0, losses: 0 },
+  strategyState: {}, // Estado específico da estratégia
 };
+
+// =========================
+// INSTÂNCIAS DOS MÓDULOS
+// =========================
+const logger = new Logger(io);
+const sequenceTracker = new SequenceTracker(logger);
+const derivAPI = new DerivAPI(logger);
+
+// Estratégias disponíveis
+const strategies = {
+  EvenOdd: new EvenOddStrategy(config, logger)
+};
+
+let currentStrategy = strategies[config.strategy];
 
 // =========================
 // CONTROLE DE TRADES
 // =========================
 let localTrades = {};
 let tradeCounter = 0;
-
-// =========================
-// LOGS
-// =========================
-let systemLogs = []; // Array para armazenar todos os logs
-
-function log(message, type = "info") {
-  const logObj = {
-    message,
-    type,
-    category: "general",
-    timestamp: new Date().toLocaleTimeString(),
-    fullTimestamp: new Date().toISOString(),
-  };
-  
-  // Armazenar no array de logs
-  systemLogs.push(logObj);
-  
-  // Manter apenas os últimos 1000 logs na memória
-  if (systemLogs.length > 1000) {
-    systemLogs.shift();
-  }
-  
-  console.log(`[${type.toUpperCase()}] ${message}`);
-  io.emit("newLog", logObj);
-}
-
-// =========================
-// RASTREAMENTO DE SEQUÊNCIAS
-// =========================
-let sequenceStats = {
-  pares: {}, // {2: 4, 3: 2, 4: 1} significa: 2 pares consecutivos aconteceu 4 vezes
-  impares: {},
-  currentParesSequence: 0,
-  currentImparesSequence: 0
-};
-
-function updateSequenceStats(digit) {
-  const isEven = digit % 2 === 0;
-  
-  if (isEven) {
-    // Se for par
-    sequenceStats.currentParesSequence++;
-    
-    // Se tinha sequência de ímpares, finaliza e conta
-    if (sequenceStats.currentImparesSequence > 0) {
-      const count = sequenceStats.currentImparesSequence;
-      sequenceStats.impares[count] = (sequenceStats.impares[count] || 0) + 1;
-      // log(`Sequência de ${count} ímpares finalizada. Total registrado: ${sequenceStats.impares[count]} vezes`);
-      sequenceStats.currentImparesSequence = 0;
-    }
-  } else {
-    // Se for ímpar
-    sequenceStats.currentImparesSequence++;
-    
-    // Se tinha sequência de pares, finaliza e conta
-    if (sequenceStats.currentParesSequence > 0) {
-      const count = sequenceStats.currentParesSequence;
-      sequenceStats.pares[count] = (sequenceStats.pares[count] || 0) + 1;
-      // log(`Sequência de ${count} pares finalizada. Total registrado: ${sequenceStats.pares[count]} vezes`);
-      sequenceStats.currentParesSequence = 0;
-    }
-  }
-}
-
-function generateSequenceReport() {
-  let report = "=== RELATÓRIO DE SEQUÊNCIAS ===\n";
-  report += `Gerado em: ${new Date().toLocaleString('pt-BR')}\n\n`;
-  
-  report += "SEQUÊNCIAS DE DÍGITOS PARES:\n";
-  const paresKeys = Object.keys(sequenceStats.pares).sort((a, b) => parseInt(a) - parseInt(b));
-  if (paresKeys.length === 0) {
-    report += "Nenhuma sequência de pares registrada ainda.\n";
-  } else {
-    paresKeys.forEach(length => {
-      report += `${length} pares consecutivos: ${sequenceStats.pares[length]} vezes\n`;
-    });
-  }
-  
-  report += "\nSEQUÊNCIAS DE DÍGITOS ÍMPARES:\n";
-  const imparesKeys = Object.keys(sequenceStats.impares).sort((a, b) => parseInt(a) - parseInt(b));
-  if (imparesKeys.length === 0) {
-    report += "Nenhuma sequência de ímpares registrada ainda.\n";
-  } else {
-    imparesKeys.forEach(length => {
-      report += `${length} ímpares consecutivos: ${sequenceStats.impares[length]} vezes\n`;
-    });
-  }
-  
-  report += "\nSEQUÊNCIAS ATUAIS EM ANDAMENTO:\n";
-  if (sequenceStats.currentParesSequence > 0) {
-    report += `Pares em andamento: ${sequenceStats.currentParesSequence} consecutivos\n`;
-  }
-  if (sequenceStats.currentImparesSequence > 0) {
-    report += `Ímpares em andamento: ${sequenceStats.currentImparesSequence} consecutivos\n`;
-  }
-  if (sequenceStats.currentParesSequence === 0 && sequenceStats.currentImparesSequence === 0) {
-    report += "Nenhuma sequência em andamento no momento.\n";
-  }
-  
-  return report;
-}
-
-function generateFullLogReport() {
-  let report = "=== RELATÓRIO COMPLETO DE LOGS ===\n";
-  report += `Gerado em: ${new Date().toLocaleString('pt-BR')}\n`;
-  report += `Total de logs: ${systemLogs.length}\n\n`;
-  
-  systemLogs.forEach(logEntry => {
-    const timestamp = new Date(logEntry.fullTimestamp).toLocaleString('pt-BR');
-    report += `[${logEntry.type.toUpperCase()}] ${timestamp} - ${logEntry.message}\n`;
-  });
-  
-  return report;
-}
 
 // =========================
 // UTILS
@@ -179,7 +82,7 @@ function ensureValidNumber(value, defaultValue = 1.0) {
 function checkProfitGoal() {
   if (config.profitGoal > 0 && botState.stats.profit >= config.profitGoal) {
     botState.isRunning = false;
-    log(`Meta de lucro atingida! Lucro atual: $${botState.stats.profit.toFixed(2)} | Meta: $${config.profitGoal.toFixed(2)}`, "success");
+    logger.log(`Meta de lucro atingida! Lucro atual: $${botState.stats.profit.toFixed(2)} | Meta: $${config.profitGoal.toFixed(2)}`, "success");
     io.emit("botStateUpdate", botState);
     return true;
   }
@@ -187,90 +90,7 @@ function checkProfitGoal() {
 }
 
 // =========================
-// CONEXÃO COM DERIV
-// =========================
-let ws = null;
-let apiToken = null;
-
-function connectToDerivAPI(token) {
-  if (ws && ws.readyState === WebSocket.OPEN) ws.close();
-
-  ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
-
-  ws.on("open", () => {
-    ws.send(JSON.stringify({ authorize: token }));
-  });
-
-  ws.on("message", (data) => {
-    try {
-      const response = JSON.parse(data);
-      handleAPIResponse(response);
-    } catch (error) {}
-  });
-
-  ws.on("error", () => {
-    botState.connected = false;
-  });
-
-  ws.on("close", () => {
-    botState.connected = false;
-    io.emit("botStateUpdate", botState);
-  });
-}
-
-// =========================
-// HANDLER DA API
-// =========================
-function handleAPIResponse(response) {
-  if (response.error) {
-    botState.makingEntry = false;
-    log(`Erro API: ${response.error.message}`, "error");
-    return;
-  }
-
-  if (response.authorize) {
-    botState.connected = true;
-    ws.send(JSON.stringify({ balance: 1, subscribe: 1 }));
-    ws.send(JSON.stringify({ ticks: config.symbol, subscribe: 1 }));
-    io.emit("botStateUpdate", botState);
-    log("Conectado à Deriv API");
-  }
-
-  if (response.balance) {
-    botState.balance = ensureValidNumber(response.balance.balance, 0);
-    io.emit("botStateUpdate", botState);
-  }
-
-  // Recebe proposta, compra automaticamente
-  if (response.proposal) {
-    const buyRequest = {
-      buy: response.proposal.id,
-      price: response.proposal.ask_price
-    };
-    try {
-      ws.send(JSON.stringify(buyRequest));
-    } catch (err) {
-      botState.makingEntry = false;
-      log("Erro ao enviar buy", "error");
-    }
-  }
-
-  // Confirmação de contrato comprado
-  if (response.buy) {
-    const tradeId = response.buy.contract_id || tradeCounter;
-    const stake = response.buy.buy_price || botState.currentStake;
-
-    // log(`Trade confirmado #${tradeId} | Stake: ${stake}`);
-    botState.makingEntry = false;
-  }
-
-  if (response.tick) {
-    handleTick(response.tick);
-  }
-}
-
-// =========================
-// TICKS E RESULTADOS - ESTRATÉGIA CORRIGIDA
+// TICKS E RESULTADOS
 // =========================
 function handleTick(tick) {
   if (!botState.isRunning) return;
@@ -282,12 +102,37 @@ function handleTick(tick) {
   if (botState.lastDigits.length > 20) botState.lastDigits.shift();
 
   // Atualizar estatísticas de sequência
-  updateSequenceStats(lastDigit);
+  sequenceTracker.updateSequenceStats(lastDigit);
 
   // Resolver trades abertos
-  for (let id in localTrades) {
+  resolveOpenTrades(lastDigit);
+
+  // Se a estratégia/parada foi acionada ao resolver trades (ex.: gale máximo),
+  // não processamos novas entradas neste mesmo tick.
+  if (!botState.isRunning) {
+    io.emit("botStateUpdate", botState);
+    return;
+  }
+
+  // Processar lógica da estratégia atual
+  if (currentStrategy) {
+    const decision = currentStrategy.processSignal(lastDigit, botState.strategyState);
+    
+    if (decision.shouldTrade) {
+      makeEntryAsync(lastDigit, decision.entryType, decision.reason);
+    }
+  }
+
+  io.emit("botStateUpdate", botState);
+}
+
+function resolveOpenTrades(lastDigit) {
+  // snapshot das chaves para evitar surpresas se localTrades for modificado durante o loop
+  const tradeIds = Object.keys(localTrades);
+
+  for (const id of tradeIds) {
     const trade = localTrades[id];
-    if (trade.status === "open") {
+    if (trade && trade.status === "open") {
       const isWin = (trade.entryType === "DIGITODD") ? lastDigit % 2 === 1 : lastDigit % 2 === 0;
       const profit = isWin ? trade.stake * config.payout : -trade.stake;
 
@@ -300,15 +145,18 @@ function handleTick(tick) {
 
       if (isWin) {
         botState.stats.wins++;
-        // WIN: Reset completo - volta ao estado inicial
-        botState.martingaleCount = 0;
-        botState.currentStake = config.baseStake;
-        botState.waitingForPairs = 0;
-        botState.waitingForImpares = 0;
-        botState.makingEntry = false;
-        
-        log(`Trade #${trade.id} WIN | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | +${profit.toFixed(2)} | Reset completo`);
-        
+        // Log do resultado primeiro (assim aparece antes dos logs da estratégia)
+        logger.log(`Trade #${trade.id} WIN | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | +${profit.toFixed(2)}`);
+
+        // Notificar estratégia sobre WIN (pode resetar estado)
+        if (currentStrategy) {
+          try {
+            currentStrategy.onTradeResult(trade, botState.strategyState, true);
+          } catch (err) {
+            logger.log(`Erro em onTradeResult (win): ${err.message}`, "error");
+          }
+        }
+
         // Verificar meta de lucro após win
         if (checkProfitGoal()) {
           io.emit("tradeResult", trade);
@@ -316,108 +164,65 @@ function handleTick(tick) {
         }
       } else {
         botState.stats.losses++;
-        if (botState.martingaleCount < config.maxMartingale) {
-          botState.martingaleCount++;
-          botState.currentStake *= config.multiplier;
-          botState.currentStake = parseFloat(botState.currentStake.toFixed(2));
-          log(`Trade #${trade.id} LOSS | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | ${profit.toFixed(2)} | Preparando Gale ${botState.martingaleCount}/${config.maxMartingale}`, "error");
-          
-          // No martingale, vai fazer entrada IMEDIATAMENTE no próximo tick,
-          // independente de sequência, mantendo o mesmo tipo de entrada (par/ímpar)
-        } else {
-          botState.martingaleCount = 0;
-          botState.currentStake = config.baseStake;
-          botState.waitingForPairs = 0;
-          botState.waitingForImpares = 0;
-          botState.isRunning = false;
-          log(`Gale máximo atingido. Bot parado. Revise a estratégia ou reinicie.`, "error");
+        // Log do resultado primeiro (para aparecer antes do "Preparando Gale")
+        logger.log(`Trade #${trade.id} LOSS | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | ${profit.toFixed(2)}`, "error");
+
+        // Notificar estratégia sobre LOSS
+        if (currentStrategy) {
+          try {
+            const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false);
+            if (!shouldContinue) {
+              // estratégia pediu para parar => garantir que nenhuma nova entrada seja feita
+              botState.isRunning = false;
+              botState.makingEntry = false;
+              logger.log(`Estratégia interrompida. Bot parado.`, "error");
+            }
+          } catch (err) {
+            logger.log(`Erro em onTradeResult (loss): ${err.message}`, "error");
+          }
         }
       }
+
       io.emit("tradeResult", trade);
     }
   }
-
-  // LÓGICA DE ENTRADA CORRIGIDA
-  // Se está em martingale, faz entrada imediata mantendo a mesma estratégia
-  if (botState.martingaleCount > 0) {
-    // Determinar qual foi a estratégia anterior baseada nos contadores
-    let shouldMakeEntry = false;
-    let entryType = "";
-    
-    if (botState.waitingForPairs > 0 || (botState.waitingForPairs === 0 && botState.waitingForImpares === 0 && lastDigit % 2 === 0)) {
-      // Estava/está esperando pares para apostar em ímpar
-      entryType = "DIGITODD";
-      shouldMakeEntry = true;
-      log(`Martingale ${botState.martingaleCount}: Entrada ÍMPAR (continuando estratégia)`, "warning");
-    } else if (botState.waitingForImpares > 0 || (botState.waitingForPairs === 0 && botState.waitingForImpares === 0 && lastDigit % 2 === 1)) {
-      // Estava/está esperando ímpares para apostar em par
-      entryType = "DIGITEVEN";
-      shouldMakeEntry = true;
-      log(`Martingale ${botState.martingaleCount}: Entrada PAR (continuando estratégia)`, "warning");
-    }
-    
-    if (shouldMakeEntry) {
-      makeEntryAsync(lastDigit, entryType);
-      return; // Sai da função para não processar a lógica de contagem normal
-    }
-  }
-
-  // LÓGICA NORMAL (não está em martingale)
-  if (lastDigit % 2 === 0) {
-    // Dígito PAR - conta para sequência de pares
-    botState.waitingForPairs++;
-    botState.waitingForImpares = 0; // Reset contador de ímpares
-    log(`Par detectado: ${lastDigit} (${botState.waitingForPairs}/${config.minPairs} pares consecutivos)`);
-
-    // Se atingiu a quantidade configurada de pares, apostar em ÍMPAR
-    if (botState.waitingForPairs >= config.minPairs) {
-      // log(`Sequência de ${config.minPairs} pares atingida! Fazendo entrada em ÍMPAR`);
-      makeEntryAsync(lastDigit, "DIGITODD");
-      // NÃO resetamos os contadores aqui - só resetam quando WIN ou após gale máximo
-    }
-  } else {
-    // Dígito ÍMPAR - conta para sequência de ímpares
-    botState.waitingForImpares++;
-    botState.waitingForPairs = 0; // Reset contador de pares
-    log(`Ímpar detectado: ${lastDigit} (${botState.waitingForImpares}/${config.minImpares} ímpares consecutivos)`);
-
-    // Se atingiu a quantidade configurada de ímpares, apostar em PAR
-    if (botState.waitingForImpares >= config.minImpares) {
-      // log(`Sequência de ${config.minImpares} ímpares atingida! Fazendo entrada em PAR`);
-      makeEntryAsync(lastDigit, "DIGITEVEN");
-      // NÃO resetamos os contadores aqui - só resetam quando WIN ou após gale máximo
-    }
-  }
-
-  io.emit("botStateUpdate", botState);
 }
+
 
 // =========================
 // FAZER ENTRADA
 // =========================
-function makeEntryAsync(lastDigit = null, entryType = "DIGITODD") {
-  if (!botState.connected) return;
+function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "") {
+  if (!botState.connected || !botState.isRunning) {
+    // garantir que flag de tentativa de entrada seja resetada
+    botState.makingEntry = false;
+    return;
+  }
 
-  botState.currentStake = parseFloat(ensureValidNumber(botState.currentStake, config.baseStake).toFixed(2));
-  if (botState.currentStake > botState.balance) {
+  const rawStake = currentStrategy ? currentStrategy.getCurrentStake(botState.strategyState) : config.baseStake;
+  const stake = parseFloat(Number(rawStake).toFixed(2));
+  
+  if (stake > botState.balance) {
     botState.isRunning = false;
-    log("Saldo insuficiente. Bot parado.", "error");
+    botState.makingEntry = false;
+    logger.log("Saldo insuficiente. Bot parado.", "error");
     return;
   }
 
   const id = ++tradeCounter;
   localTrades[id] = {
     id,
-    stake: botState.currentStake,
+    stake: stake,
     entryDigit: lastDigit,
     entryType,
     status: "open",
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    reason: reason
   };
 
   const proposalRequest = {
     proposal: 1,
-    amount: botState.currentStake,
+    amount: stake,
     basis: "stake",
     contract_type: entryType,
     currency: "USD",
@@ -428,14 +233,16 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD") {
 
   botState.makingEntry = true;
   try {
-    ws.send(JSON.stringify(proposalRequest));
+    derivAPI.sendMessage(proposalRequest);
   } catch (error) {
     botState.makingEntry = false;
+    logger.log("Erro ao enviar proposta", "error");
   }
 
   io.emit("tradePending", localTrades[id]);
-  log(`Trade #${id} lançado | Entrada ${entryType} após dígito: ${lastDigit} | Stake: ${botState.currentStake}`);
+  logger.log(`Trade #${id} lançado | ${reason} | Entrada ${entryType} após dígito: ${lastDigit} | Stake: ${stake}`);
 }
+
 
 // =========================
 // SOCKET.IO
@@ -450,103 +257,56 @@ io.on("connection", (socket) => {
       socket.emit("connectionError", "Token inválido");
       return;
     }
-    apiToken = token;
-    connectToDerivAPI(apiToken);
+    derivAPI.connect(token, handleAPIResponse);
   });
 
   socket.on("start_bot", () => {
     if (!botState.connected) return;
     botState.isRunning = true;
-    botState.waitingForPairs = 0;
-    botState.waitingForImpares = 0;
     botState.makingEntry = false;
-    botState.currentStake = ensureValidNumber(botState.currentStake, config.baseStake);
-    log("Bot iniciado");
+    
+    // Reset da estratégia
+    if (currentStrategy) {
+      botState.strategyState = currentStrategy.reset();
+    }
+    
+    logger.log("Bot iniciado");
     io.emit("botStateUpdate", botState);
   });
 
   socket.on("stop_bot", () => {
     botState.isRunning = false;
     botState.makingEntry = false;
-    log("Bot parado", "warning");
+    logger.log("Bot parado", "warning");
     io.emit("botStateUpdate", botState);
   });
 
   socket.on("update_config", (newConfig) => {
-    const baseStake = ensureValidNumber(newConfig.baseStake, 0.35);
-    const multiplier = ensureValidNumber(newConfig.multiplier, 2.0);
-    const maxMartingale = parseInt(newConfig.maxMartingale) || 5;
-    const payout = ensureValidNumber(newConfig.payout, 0.95);
-    const minPairs = parseInt(newConfig.minPairs) || 5;
-    const minImpares = parseInt(newConfig.minImpares) || 5;
-    const profitGoal = ensureValidNumber(newConfig.profitGoal, 0);
+    updateConfig(newConfig);
+  });
 
-    // Validações
-    if (baseStake < 0.35) {
-      log("Stake inicial deve ser no mínimo $0.35", "error");
-      return;
+  socket.on("change_strategy", (strategyName) => {
+    if (strategies[strategyName]) {
+      config.strategy = strategyName;
+      currentStrategy = strategies[strategyName];
+      currentStrategy.updateConfig(config);
+      botState.strategyState = currentStrategy.reset();
+      
+      logger.log(`Estratégia alterada para: ${strategyName}`);
+      io.emit("configUpdate", config);
+      io.emit("botStateUpdate", botState);
+    } else {
+      logger.log(`Estratégia '${strategyName}' não encontrada`, "error");
     }
-    if (multiplier < 1.1) {
-      log("Multiplicador deve ser no mínimo 1.1", "error");
-      return;
-    }
-    if (payout < 0.1 || payout > 5.0) {
-      log("Payout deve estar entre 0.1 e 5.0", "error");
-      return;
-    }
-    if (minPairs < 1 || minPairs > 20) {
-      log("Mínimo de pares deve estar entre 1 e 20", "error");
-      return;
-    }
-    if (minImpares < 1 || minImpares > 20) {
-      log("Mínimo de ímpares deve estar entre 1 e 20", "error");
-      return;
-    }
-
-    // Atualizar configurações
-    config.baseStake = baseStake;
-    config.multiplier = multiplier;
-    config.maxMartingale = maxMartingale;
-    config.payout = payout;
-    config.minPairs = minPairs;
-    config.minImpares = minImpares;
-    config.profitGoal = profitGoal;
-
-    // Reset do stake atual se não estiver em martingale
-    if (botState.martingaleCount === 0) {
-      botState.currentStake = config.baseStake;
-    }
-
-    log("Configurações atualizadas com sucesso");
-    io.emit("botStateUpdate", botState);
-    io.emit("configUpdate", config);
   });
 
   socket.on("reset_stats", () => {
-    botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0 };
-    botState.martingaleCount = 0;
-    botState.currentStake = config.baseStake;
-    botState.waitingForPairs = 0;
-    botState.waitingForImpares = 0;
-    botState.makingEntry = false;
-    localTrades = {};
-    tradeCounter = 0;
-    
-    // Resetar também as estatísticas de sequência
-    sequenceStats = {
-      pares: {},
-      impares: {},
-      currentParesSequence: 0,
-      currentImparesSequence: 0
-    };
-    
-    log("Estatísticas resetadas");
-    io.emit("botStateUpdate", botState);
+    resetStats();
   });
 
   socket.on("clear_digits", () => {
     botState.lastDigits = [];
-    log("Dígitos limpos");
+    logger.log("Dígitos limpos");
     io.emit("botStateUpdate", botState);
   });
 
@@ -554,9 +314,9 @@ io.on("connection", (socket) => {
     socket.emit("configUpdate", config);
   });
 
-  // Novos eventos para download de relatórios
+  // Relatórios
   socket.on("download_full_log", () => {
-    const report = generateFullLogReport();
+    const report = logger.generateFullLogReport();
     socket.emit("downloadFile", {
       filename: `logs_completos_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`,
       content: report,
@@ -565,7 +325,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("download_sequence_report", () => {
-    const report = generateSequenceReport();
+    const report = sequenceTracker.generateSequenceReport();
     socket.emit("downloadFile", {
       filename: `relatorio_sequencias_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`,
       content: report,
@@ -573,6 +333,112 @@ io.on("connection", (socket) => {
     });
   });
 });
+
+// =========================
+// HELPER FUNCTIONS
+// =========================
+function handleAPIResponse(response) {
+  if (response.error) {
+    botState.makingEntry = false;
+    logger.log(`Erro API: ${response.error.message}`, "error");
+    return;
+  }
+
+  if (response.authorize) {
+    botState.connected = true;
+    derivAPI.sendMessage({ balance: 1, subscribe: 1 });
+    derivAPI.sendMessage({ ticks: config.symbol, subscribe: 1 });
+    io.emit("botStateUpdate", botState);
+    logger.log("Conectado à Deriv API");
+  }
+
+  if (response.balance) {
+    botState.balance = ensureValidNumber(response.balance.balance, 0);
+    io.emit("botStateUpdate", botState);
+  }
+
+  if (response.proposal) {
+    const buyRequest = {
+      buy: response.proposal.id,
+      price: response.proposal.ask_price
+    };
+    try {
+      derivAPI.sendMessage(buyRequest);
+    } catch (err) {
+      botState.makingEntry = false;
+      logger.log("Erro ao enviar buy", "error");
+    }
+  }
+
+  if (response.buy) {
+    botState.makingEntry = false;
+  }
+
+  if (response.tick) {
+    handleTick(response.tick);
+  }
+}
+
+function updateConfig(newConfig) {
+  const baseStake = ensureValidNumber(newConfig.baseStake, 0.35);
+  const multiplier = ensureValidNumber(newConfig.multiplier, 2.0);
+  const maxMartingale = parseInt(newConfig.maxMartingale) || 5;
+  const payout = ensureValidNumber(newConfig.payout, 0.95);
+  const minEven = parseInt(newConfig.minEven) || 5;
+  const minOdd = parseInt(newConfig.minOdd) || 5;
+  const profitGoal = ensureValidNumber(newConfig.profitGoal, 0);
+
+  // Validações
+  if (baseStake < 0.35) {
+    logger.log("Stake inicial deve ser no mínimo $0.35", "error");
+    return;
+  }
+  if (multiplier < 1.1) {
+    logger.log("Multiplicador deve ser no mínimo 1.1", "error");
+    return;
+  }
+  if (payout < 0.1 || payout > 5.0) {
+    logger.log("Payout deve estar entre 0.1 e 5.0", "error");
+    return;
+  }
+
+  // Atualizar configurações
+  Object.assign(config, {
+    baseStake,
+    multiplier,
+    maxMartingale,
+    payout,
+    minEven,
+    minOdd,
+    profitGoal
+  });
+
+  // Atualizar estratégia atual
+  if (currentStrategy) {
+    currentStrategy.updateConfig(config);
+  }
+
+  logger.log("Configurações atualizadas com sucesso");
+  io.emit("botStateUpdate", botState);
+  io.emit("configUpdate", config);
+}
+
+function resetStats() {
+  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0 };
+  botState.makingEntry = false;
+  localTrades = {};
+  tradeCounter = 0;
+  
+  // Reset da estratégia atual
+  if (currentStrategy) {
+    botState.strategyState = currentStrategy.reset();
+  }
+  
+  sequenceTracker.reset();
+  
+  logger.log("Estatísticas resetadas");
+  io.emit("botStateUpdate", botState);
+}
 
 // =========================
 // START SERVER
