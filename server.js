@@ -2,9 +2,10 @@ const WebSocket = require("ws");
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
+const fs = require("fs");
+const path = require("path");
 
-// Importar estratégias
-const EvenOddStrategy = require("./strategies/EvenOdd");
+// Importar utilitários
 const SequenceTracker = require("./utils/SequenceTracker");
 const Logger = require("./utils/Logger");
 const DerivAPI = require("./api/DerivAPI");
@@ -22,7 +23,7 @@ app.use(express.static(__dirname + "/public"));
 // CONFIG - Agora todas as configurações são dinâmicas
 // =========================
 let config = {
-  strategy: "EvenOdd", // nova propriedade para selecionar estratégia
+  strategy: "EvenOdd", // estratégia inicial
   contract_type: "DIGITODD",
   duration: 1,
   symbol: "1HZ10V",
@@ -56,10 +57,20 @@ const logger = new Logger(io);
 const sequenceTracker = new SequenceTracker(logger);
 const derivAPI = new DerivAPI(logger);
 
-// Estratégias disponíveis
-const strategies = {
-  EvenOdd: new EvenOddStrategy(config, logger)
-};
+// =========================
+// CARREGAR ESTRATÉGIAS DINAMICAMENTE
+// =========================
+const strategies = {};
+const strategiesDir = path.join(__dirname, "strategies");
+
+fs.readdirSync(strategiesDir).forEach(file => {
+  if (file.endsWith(".js")) {
+    const StrategyClass = require(path.join(strategiesDir, file));
+    const strategyName = path.basename(file, ".js");
+    strategies[strategyName] = new StrategyClass(config, logger);
+    logger.log(`Estratégia carregada: ${strategyName}`);
+  }
+});
 
 let currentStrategy = strategies[config.strategy];
 
@@ -143,7 +154,7 @@ function resolveOpenTrades(lastDigit) {
       if (isWin) {
         botState.stats.wins++;
         // Log do resultado primeiro (assim aparece antes dos logs da estratégia)
-        logger.log(`Trade #${trade.id} WIN | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`);
+        logger.log(`Trade #${trade.id} WIN | Entrada após digito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`);
 
         // Notificar estratégia sobre WIN (pode resetar estado)
         if (currentStrategy) {
@@ -162,7 +173,7 @@ function resolveOpenTrades(lastDigit) {
       } else {
         botState.stats.losses++;
         // Log do resultado primeiro (para aparecer antes do "Preparando Gale")
-        logger.log(`Trade #${trade.id} LOSS | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`, "error");
+        logger.log(`Trade #${trade.id} LOSS | Entrada após dígito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`, "error");
 
         // Notificar estratégia sobre LOSS
         if (currentStrategy) {
