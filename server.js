@@ -44,6 +44,7 @@ let botState = {
   makingEntry: false,
   lastDigits: [],
   balance: 0,
+  initialBalance: 0,      
   stats: { profit: 0, totalTrades: 0, wins: 0, losses: 0 },
   strategyState: {}, // Estado específico da estratégia
 };
@@ -134,19 +135,15 @@ function resolveOpenTrades(lastDigit) {
     const trade = localTrades[id];
     if (trade && trade.status === "open") {
       const isWin = (trade.entryType === "DIGITODD") ? lastDigit % 2 === 1 : lastDigit % 2 === 0;
-      const profit = isWin ? trade.stake * config.payout : -trade.stake;
-
+      
       trade.resultDigit = lastDigit;
-      trade.profit = profit;
-      trade.status = isWin ? "win" : "loss";
+      trade.status = isWin ? "win" : "loss";     
 
       botState.stats.totalTrades++;
-      botState.stats.profit += profit;
-
       if (isWin) {
         botState.stats.wins++;
         // Log do resultado primeiro (assim aparece antes dos logs da estratégia)
-        logger.log(`Trade #${trade.id} WIN | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | +${profit.toFixed(2)}`);
+        logger.log(`Trade #${trade.id} WIN | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`);
 
         // Notificar estratégia sobre WIN (pode resetar estado)
         if (currentStrategy) {
@@ -165,7 +162,7 @@ function resolveOpenTrades(lastDigit) {
       } else {
         botState.stats.losses++;
         // Log do resultado primeiro (para aparecer antes do "Preparando Gale")
-        logger.log(`Trade #${trade.id} LOSS | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit} | ${profit.toFixed(2)}`, "error");
+        logger.log(`Trade #${trade.id} LOSS | Entrada: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`, "error");
 
         // Notificar estratégia sobre LOSS
         if (currentStrategy) {
@@ -354,6 +351,16 @@ function handleAPIResponse(response) {
 
   if (response.balance) {
     botState.balance = ensureValidNumber(response.balance.balance, 0);
+    
+    if (botState.initialBalance === 0) {
+      botState.initialBalance = botState.balance;
+      logger.log(`Saldo inicial definido: $${botState.initialBalance.toFixed(2)}`);
+    }
+    
+    botState.stats.profit = parseFloat(
+        (botState.balance - botState.initialBalance).toFixed(2)
+      );
+
     io.emit("botStateUpdate", botState);
   }
 
@@ -424,7 +431,7 @@ function updateConfig(newConfig) {
 }
 
 function resetStats() {
-  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0 };
+  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0, initialBalance:0 };
   botState.makingEntry = false;
   localTrades = {};
   tradeCounter = 0;
