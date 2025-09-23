@@ -101,7 +101,6 @@ function simulateStrategy(historicalDigits) {
         
         if (isWin) {
           results.wins++;
-          results.balance += results.currentStake * 0.95; // 95% payout
           results.waitingForPairs = 0;
           results.martingaleCount = 0;
           results.currentStake = 1;

@@ -182,14 +182,6 @@ class EvenOddStrategy {
         min: 1,
         max: 15,
         default: 8
-      },
-      payout: {
-        type: 'number',
-        label: 'Payout (%)',
-        min: 0.1,
-        max: 5.0,
-        step: 0.01,
-        default: 0.95
       }
     };
   }

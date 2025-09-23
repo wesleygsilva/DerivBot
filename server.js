@@ -30,7 +30,6 @@ let config = {
   baseStake: 0.35,
   multiplier: 2.2,
   maxMartingale: 8,
-  payout: 0.95,
   minEven: 6,
   minOdd: 6,
   profitGoal: 0,
@@ -401,7 +400,6 @@ function updateConfig(newConfig) {
   const baseStake = ensureValidNumber(newConfig.baseStake, 0.35);
   const multiplier = ensureValidNumber(newConfig.multiplier, 2.0);
   const maxMartingale = parseInt(newConfig.maxMartingale) || 5;
-  const payout = ensureValidNumber(newConfig.payout, 0.95);
   const minEven = parseInt(newConfig.minEven) || 5;
   const minOdd = parseInt(newConfig.minOdd) || 5;
   const profitGoal = ensureValidNumber(newConfig.profitGoal, 0);
@@ -415,17 +413,12 @@ function updateConfig(newConfig) {
     logger.log("Multiplicador deve ser no mínimo 1.1", "error");
     return;
   }
-  if (payout < 0.1 || payout > 5.0) {
-    logger.log("Payout deve estar entre 0.1 e 5.0", "error");
-    return;
-  }
 
   // Atualizar configurações
   Object.assign(config, {
     baseStake,
     multiplier,
     maxMartingale,
-    payout,
     minEven,
     minOdd,
     profitGoal

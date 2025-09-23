@@ -424,34 +424,28 @@ body {
 
         <div class="panel config-panel">
             <h3>Configurações da Estratégia</h3>
-            
-            <div class="form-row">
+            <div class="form-row">                
                 <div class="form-group">
                     <label for="baseStake">Stake Inicial ($):</label>
                     <input type="number" id="baseStake" value="0.35" min="0.35" step="0.01">
                     <div class="input-help">Mínimo: $0.35</div>
                 </div>
+            </div>
+
+            <div class="form-row">                
                 <div class="form-group">
                     <label for="multiplier">Multiplicador Martingale:</label>
                     <input type="number" id="multiplier" value="2.2" min="1.1" step="0.1">
                     <div class="input-help">Mínimo: 1.1</div>
                 </div>
-            </div>
-
-            <div class="form-row">
                 <div class="form-group">
                     <label for="maxMartingale">Máx. Martingales:</label>
                     <input type="number" id="maxMartingale" value="8" min="1" max="15">
                     <div class="input-help">Entre 1 e 15</div>
-                </div>
-                <div class="form-group">
-                    <label for="payout">Payout da Estratégia:</label>
-                    <input type="number" id="payout" value="0.95" min="0.1" max="5.0" step="0.01">
-                    <div class="input-help">Entre 0.1 e 5.0</div>
-                </div>
+                </div>                
             </div>
 
-            <div class="form-row">
+            <div class="form-row">                
                 <div class="form-group">
                     <label for="minEven">Mín. Dígitos Pares:</label>
                     <input type="number" id="minEven" value="6" min="1" max="20">
@@ -626,7 +620,6 @@ function updateConfigInterface() {
     document.getElementById('baseStake').value = currentConfig.baseStake || 0.35;
     document.getElementById('multiplier').value = currentConfig.multiplier || 2.2;
     document.getElementById('maxMartingale').value = currentConfig.maxMartingale || 8;
-    document.getElementById('payout').value = currentConfig.payout || 0.95;
     document.getElementById('minEven').value = currentConfig.minEven || 6;
     document.getElementById('minOdd').value = currentConfig.minOdd || 6;
     
@@ -689,7 +682,6 @@ function updateConfig() {
     const baseStake = parseFloat(document.getElementById('baseStake').value);
     const multiplier = parseFloat(document.getElementById('multiplier').value);
     const maxMartingale = parseInt(document.getElementById('maxMartingale').value);
-    const payout = parseFloat(document.getElementById('payout').value);
     const minEven = parseInt(document.getElementById('minEven').value);
     const minOdd = parseInt(document.getElementById('minOdd').value);
     const profitGoalEnabled = document.getElementById('profitGoalEnabled').checked;
@@ -702,10 +694,6 @@ function updateConfig() {
     }
     if (multiplier < 1.1) {
         alert('Multiplicador deve ser no mínimo 1.1');
-        return;
-    }
-    if (payout < 0.1 || payout > 5.0) {
-        alert('Payout deve estar entre 0.1 e 5.0');
         return;
     }
     if (minEven < 1 || minEven > 20) {
@@ -725,7 +713,6 @@ function updateConfig() {
         baseStake,
         multiplier,
         maxMartingale,
-        payout,
         minEven,
         minOdd,
         profitGoal
