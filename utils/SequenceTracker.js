@@ -37,7 +37,7 @@ class SequenceTracker {
     
     if (isEven) {
       // Se for par
-      this.sequenceStats.currentParesSequence++;
+      this.sequenceStats.currentEvenSequence++;
       
       // Se tinha sequência de ímpares, finaliza e conta
       if (this.sequenceStats.currentOddSequence > 0) {
@@ -50,10 +50,10 @@ class SequenceTracker {
       this.sequenceStats.currentOddSequence++;
       
       // Se tinha sequência de pares, finaliza e conta
-      if (this.sequenceStats.currentParesSequence > 0) {
-        const count = this.sequenceStats.currentParesSequence;
-        this.sequenceStats.pares[count] = (this.sequenceStats.pares[count] || 0) + 1;
-        this.sequenceStats.currentParesSequence = 0;
+      if (this.sequenceStats.currentEvenSequence > 0) {
+        const count = this.sequenceStats.currentEvenSequence;
+        this.sequenceStats.Even[count] = (this.sequenceStats.Even[count] || 0) + 1;
+        this.sequenceStats.currentEvenSequence = 0;
       }
     }
   }
@@ -67,18 +67,18 @@ class SequenceTracker {
     report += `Total de dígitos analisados: ${this.sequenceStats.totalDigits}\n\n`;
     
     report += "SEQUÊNCIAS DE DÍGITOS PARES:\n";
-    const paresKeys = Object.keys(this.sequenceStats.pares).sort((a, b) => parseInt(a) - parseInt(b));
-    if (paresKeys.length === 0) {
+    const EvenKeys = Object.keys(this.sequenceStats.Even).sort((a, b) => parseInt(a) - parseInt(b));
+    if (EvenKeys.length === 0) {
       report += "Nenhuma sequência de pares registrada ainda.\n";
     } else {
-      let totalPares = 0;
-      paresKeys.forEach(length => {
-        const count = this.sequenceStats.pares[length];
-        totalPares += count;
+      let totalEven = 0;
+      EvenKeys.forEach(length => {
+        const count = this.sequenceStats.Even[length];
+        totalEven += count;
         const percentage = this.sequenceStats.totalDigits > 0 ? ((count / this.sequenceStats.totalDigits) * 100).toFixed(2) : 0;
         report += `${length} pares consecutivos: ${count} vezes (${percentage}%)\n`;
       });
-      report += `Total de sequências de pares: ${totalPares}\n`;
+      report += `Total de sequências de pares: ${totalEven}\n`;
     }
     
     report += "\nSEQUÊNCIAS DE DÍGITOS ÍMPARES:\n";
@@ -197,7 +197,7 @@ class SequenceTracker {
    * Verifica se uma sequência específica já ocorreu
    */
   hasSequenceOccurred(type, length) {
-    const sequences = type === 'par' ? this.sequenceStats.Even : this.sequenceStats.Odd;
+    const sequences = type === 'Even' ? this.sequenceStats.Even : this.sequenceStats.Odd;
     return sequences[length] ? sequences[length] > 0 : false;
   }
 
@@ -205,7 +205,7 @@ class SequenceTracker {
    * Retorna quantas vezes uma sequência específica ocorreu
    */
   getSequenceCount(type, length) {
-    const sequences = type === 'par' ? this.sequenceStats.Even : this.sequenceStats.Odd;
+    const sequences = type === 'Even' ? this.sequenceStats.Even : this.sequenceStats.Odd;
     return sequences[length] || 0;
   }
 
@@ -222,7 +222,7 @@ class SequenceTracker {
       reason: ""
     };
 
-    if (currentPar > 0) {
+    if (currentEven > 0) {
       // Analisando sequência de pares atual
       const historicalBreaks = Object.entries(this.sequenceStats.Even)
         .filter(([length]) => parseInt(length) >= currentEven)
@@ -233,7 +233,7 @@ class SequenceTracker {
       
       if (totalEvenSequences > 0) {
         prediction.confidence = Math.min(95, (historicalBreaks / totalEvenSequences) * 100);
-        prediction.type = "impar";
+        prediction.type = "Odd";
         prediction.reason = `Sequência atual de ${currentEven} pares. Histórico sugere quebra.`;
       }
     }
@@ -251,7 +251,7 @@ class SequenceTracker {
         const confidence = Math.min(95, (historicalBreaks / totalOddSequences) * 100);
         if (confidence > prediction.confidence) {
           prediction.confidence = confidence;
-          prediction.type = "par";
+          prediction.type = "Even";
           prediction.reason = `Sequência atual de ${currentOdd} ímpares. Histórico sugere quebra.`;
         }
       }
