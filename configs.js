@@ -12,7 +12,7 @@ const advancedConfig = {
 
   // Configurações de trading
   trading: {
-    defaultSymbol: 'R_10', // Volatilidade 10 (1s)
+    defaultSymbol: '1HZ10V', // Volatilidade 10 (1s)
     alternativeSymbols: ['R_25', 'R_50', 'R_75', 'R_100'], // Outras opções
     contractTypes: {
       digitOdd: 'DIGITODD',

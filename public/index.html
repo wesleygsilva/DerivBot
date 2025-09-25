@@ -122,7 +122,7 @@ body {
     font-weight: 500;
 }
 
-.form-group input {
+.form-group input, .form-group select {
     width: 100%;
     padding: 10px;
     border: 1px solid #ddd;
@@ -328,6 +328,28 @@ body {
     margin-right: 5px;
 }
 
+.strategy-selector {
+    background: #e7f3ff;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border: 1px solid #b3d9ff;
+}
+
+.strategy-info {
+    background: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 15px;
+    border-left: 4px solid #007bff;
+}
+
+.dynamic-config {
+    border-top: 2px solid #e9ecef;
+    margin-top: 20px;
+    padding-top: 20px;
+}
+
 @media (max-width: 1200px) {
     .main-content { 
         grid-template-columns: 1fr 1fr; 
@@ -365,7 +387,7 @@ body {
 <div class="container">
     <div class="header">
         <h1>Deriv Trading Bot</h1>
-        <p>Estratégia: Volatilidade 10 - Configurações Dinâmicas</p>
+        <p>Estratégia: <span id="currentStrategyName">Volatilidade 10</span> - Configurações Dinâmicas</p>
     </div>
 
     <div class="status-bar">
@@ -403,79 +425,48 @@ body {
             <button class="btn btn-success" onclick="startBot()" id="startBtn" disabled>Iniciar Bot</button>
             <button class="btn btn-warning" onclick="stopBot()" id="stopBtn" disabled>Pausar Bot</button>
             
-            <h3 style="margin-top: 30px;">Status Atual</h3>
-            <div class="form-group">
-                <label>Aguardando Pares:</label>
-                <div id="EvenCount">0/6</div>
-            </div>
-            <div class="form-group">
-                <label>Aguardando Ímpares:</label>
-                <div id="OddCount">0/6</div>
-            </div>
-            <div class="form-group">
-                <label>Próximo Stake:</label>
-                <div id="currentStake">$0.35</div>
-            </div>
-            <div class="form-group">
-                <label>Martingale:</label>
-                <div id="martingaleCount">0/8</div>
+            <h3 style="margin-top: 30px;">Status da Estratégia</h3>
+            <div id="strategyStatus">
+                <div class="strategy-info">
+                    <strong>Status:</strong> <span id="strategyStatusText">Aguardando conexão</span>
+                </div>
             </div>
         </div>
 
         <div class="panel config-panel">
-            <h3>Configurações da Estratégia</h3>
+            <h3>Seleção de Estratégia</h3>
             
-            <div class="form-row">
+            <div class="strategy-selector">
                 <div class="form-group">
-                    <label for="baseStake">Stake Inicial ($):</label>
-                    <input type="number" id="baseStake" value="0.35" min="0.35" step="0.01">
-                    <div class="input-help">Mínimo: $0.35</div>
+                    <label for="strategySelector">Escolher Estratégia:</label>
+                    <select id="strategySelector" onchange="changeStrategy()">
+                        <option value="">Carregando estratégias...</option>
+                    </select>
                 </div>
-                <div class="form-group">
-                    <label for="multiplier">Multiplicador Martingale:</label>
-                    <input type="number" id="multiplier" value="2.2" min="1.1" step="0.1">
-                    <div class="input-help">Mínimo: 1.1</div>
+                <div class="strategy-info" id="strategyDescription">
+                    Selecione uma estratégia para ver a descrição e configurações disponíveis.
                 </div>
             </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="maxMartingale">Máx. Martingales:</label>
-                    <input type="number" id="maxMartingale" value="8" min="1" max="15">
-                    <div class="input-help">Entre 1 e 15</div>
+            <div class="dynamic-config" id="dynamicConfigContainer">
+                <h4>Configurações da Estratégia</h4>
+                <div id="strategyConfigFields">
+                    <!-- Campos de configuração serão gerados dinamicamente -->
                 </div>
-                <div class="form-group">
-                    <label for="payout">Payout da Estratégia:</label>
-                    <input type="number" id="payout" value="0.95" min="0.1" max="5.0" step="0.01">
-                    <div class="input-help">Entre 0.1 e 5.0</div>
+                
+                <div class="form-group" style="margin-top: 20px;">
+                    <label for="profitGoal">Meta de Lucro ($):</label>
+                    <div class="profit-goal-container">
+                        <input type="checkbox" id="profitGoalEnabled" onchange="toggleProfitGoal()">
+                        <span>Habilitar Meta</span>
+                        <input type="number" id="profitGoal" value="10.00" min="0.01" step="0.01">
+                    </div>
+                    <div class="input-help">Bot parará automaticamente ao atingir a meta</div>
                 </div>
-            </div>
 
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="minEven">Mín. Dígitos Pares:</label>
-                    <input type="number" id="minEven" value="6" min="1" max="20">
-                    <div class="input-help">Entre 1 e 20</div>
-                </div>
-                <div class="form-group">
-                    <label for="minOdd">Mín. Dígitos Ímpares:</label>
-                    <input type="number" id="minOdd" value="6" min="1" max="20">
-                    <div class="input-help">Entre 1 e 20</div>
-                </div>
+                <button class="btn btn-primary" onclick="updateConfig()">Salvar Configurações</button>
+                <button class="btn btn-danger" onclick="resetStats()">Reset Estatísticas</button>
             </div>
-
-            <div class="form-group">
-                <label for="profitGoal">Meta de Lucro ($):</label>
-                <div class="profit-goal-container">
-                    <input type="checkbox" id="profitGoalEnabled" onchange="toggleProfitGoal()">
-                    <span>Habilitar Meta</span>
-                    <input type="number" id="profitGoal" value="10.00" min="0.01" step="0.01">
-                </div>
-                <div class="input-help">Bot parará automaticamente ao atingir a meta</div>
-            </div>
-
-            <button class="btn btn-primary" onclick="updateConfig()">💾 Salvar Configurações</button>
-            <button class="btn btn-danger" onclick="resetStats()">🔄 Reset Estatísticas</button>
         </div>
 
         <div class="panel stats-panel">
@@ -512,8 +503,8 @@ body {
             <div class="logs-header">
                 <h3>Logs do Sistema</h3>
                 <div class="download-buttons">
-                    <button class="btn-download" onclick="downloadFullLog()">📄 Download Logs</button>
-                    <button class="btn-download" onclick="downloadSequenceReport()">📊 Download Sequências</button>
+                    <button class="btn-download" onclick="downloadFullLog()">Download Logs</button>
+                    <button class="btn-download" onclick="downloadSequenceReport()">Download Sequências</button>
                     <button class="btn-clear-logs" onclick="clearLogs()">Limpar Logs</button>
                 </div>
             </div>
@@ -526,6 +517,8 @@ body {
 const socket = io();
 let botState = {};
 let currentConfig = {};
+let availableStrategies = {};
+let currentStrategySchema = {};
 
 // Receber atualizações do estado do bot
 socket.on('botStateUpdate', (state) => {
@@ -537,7 +530,18 @@ socket.on('botStateUpdate', (state) => {
 socket.on('configUpdate', (config) => {
     currentConfig = config;
     updateConfigInterface();
-    updateInterface(); // Atualizar também a interface principal para refletir a meta na barra superior
+    updateInterface();
+});
+
+// Receber lista de estratégias disponíveis
+socket.on('strategiesUpdate', (strategies) => {
+    availableStrategies = strategies;
+    updateStrategySelector();
+});
+
+// Receber informações da estratégia atual
+socket.on('currentStrategyInfo', (info) => {
+    updateStrategyInfo(info);
 });
 
 // Receber novos logs
@@ -553,18 +557,19 @@ socket.on('downloadFile', (fileData) => {
 // Solicitar configurações ao conectar
 socket.on('connect', () => {
     socket.emit('get_config');
+    socket.emit('get_strategies');
 });
 
 function updateInterface() {
     // Status de conexão
     const statusEl = document.getElementById('connectionStatus');
     if (botState.connected) {
-        statusEl.textContent = 'Conectado ✅';
+        statusEl.textContent = 'Conectado';
         statusEl.className = 'connection-status connected';
         document.getElementById('startBtn').disabled = false;
         document.getElementById('stopBtn').disabled = false;
     } else {
-        statusEl.textContent = 'Desconectado ❌';
+        statusEl.textContent = 'Desconectado';
         statusEl.className = 'connection-status disconnected';
         document.getElementById('startBtn').disabled = true;
         document.getElementById('stopBtn').disabled = true;
@@ -582,7 +587,7 @@ function updateInterface() {
     // Meta de lucro na barra superior
     const profitGoalDisplayEl = document.getElementById('profitGoalDisplay');
     if (currentConfig.profitGoal && currentConfig.profitGoal > 0) {
-        profitGoalDisplayEl.textContent = `${currentConfig.profitGoal.toFixed(2)}`;
+        profitGoalDisplayEl.textContent = `$${currentConfig.profitGoal.toFixed(2)}`;
         profitGoalDisplayEl.className = 'status-value';
     } else {
         profitGoalDisplayEl.textContent = 'Desabilitado';
@@ -602,11 +607,8 @@ function updateInterface() {
     document.getElementById('totalTradesStats').textContent = botState.stats?.totalTrades || 0;
     document.getElementById('winRateStats').textContent = `${winRate}%`;
 
-    // Status atual
-    document.getElementById('EvenCount').textContent = `${botState.waitingForEven || 0}/${currentConfig.minEven || 6}`;
-    document.getElementById('OddCount').textContent = `${botState.waitingForOdd || 0}/${currentConfig.minOdd || 6}`;
-    document.getElementById('currentStake').textContent = `$${(botState.currentStake || 0).toFixed(2)}`;
-    document.getElementById('martingaleCount').textContent = `${botState.martingaleCount || 0}/${currentConfig.maxMartingale || 8}`;
+    // Atualizar nome da estratégia atual
+    document.getElementById('currentStrategyName').textContent = currentConfig.strategy || 'N/A';
 
     // Dígitos
     const digitsContainer = document.getElementById('digitsDisplay');
@@ -619,25 +621,200 @@ function updateInterface() {
             digitsContainer.appendChild(digitEl);
         });
     }
+
+    // Status da estratégia
+    updateStrategyStatus();
+}
+
+function updateStrategySelector() {
+    const selector = document.getElementById('strategySelector');
+    selector.innerHTML = '<option value="">Selecione uma estratégia</option>';
+    
+    Object.keys(availableStrategies).forEach(strategyName => {
+        const option = document.createElement('option');
+        option.value = strategyName;
+        option.textContent = availableStrategies[strategyName].name || strategyName;
+        selector.appendChild(option);
+    });
+
+    // Selecionar a estratégia atual
+    if (currentConfig.strategy) {
+        selector.value = currentConfig.strategy;
+    }
 }
 
 function updateConfigInterface() {
-    // Atualizar campos de configuração com valores do servidor
-    document.getElementById('baseStake').value = currentConfig.baseStake || 0.35;
-    document.getElementById('multiplier').value = currentConfig.multiplier || 2.2;
-    document.getElementById('maxMartingale').value = currentConfig.maxMartingale || 8;
-    document.getElementById('payout').value = currentConfig.payout || 0.95;
-    document.getElementById('minEven').value = currentConfig.minEven || 6;
-    document.getElementById('minOdd').value = currentConfig.minOdd || 6;
-    
     // Meta de lucro
     const profitGoalEnabled = currentConfig.profitGoal && currentConfig.profitGoal > 0;
     document.getElementById('profitGoalEnabled').checked = profitGoalEnabled;
     document.getElementById('profitGoal').disabled = !profitGoalEnabled;
     
-    // Usar o valor do servidor se existir, senão manter o valor atual do campo
     if (currentConfig.profitGoal !== undefined) {
         document.getElementById('profitGoal').value = currentConfig.profitGoal > 0 ? currentConfig.profitGoal.toFixed(2) : '10.00';
+    }
+
+    // Atualizar campos de configuração dinâmicos
+    if (currentConfig.strategy && availableStrategies[currentConfig.strategy]) {
+        generateStrategyConfigFields(currentConfig.strategy);
+    }
+}
+
+function updateStrategyInfo(info) {
+    currentStrategySchema = info.schema || {};
+    document.getElementById('strategyDescription').innerHTML = 
+        `<strong>${info.name}:</strong> ${info.description || 'Estratégia de trading automatizado'}`;
+    
+    generateStrategyConfigFields(currentConfig.strategy);
+}
+
+function updateStrategyStatus() {
+    const statusContainer = document.getElementById('strategyStatusText');
+    
+    if (!botState.connected) {
+        statusContainer.textContent = 'Aguardando conexão';
+        return;
+    }
+
+    if (!botState.isRunning) {
+        statusContainer.textContent = 'Bot parado';
+        return;
+    }
+
+    // Status específico baseado na estratégia atual
+    if (botState.strategyState) {
+        const state = botState.strategyState;
+        let statusText = '';
+
+        // Para estratégia EvenOdd
+        if (currentConfig.strategy === 'EvenOddStrategy') {
+            const evenCount = state.waitingForEven || 0;
+            const oddCount = state.waitingForOdd || 0;
+            const martingale = state.martingaleCount || 0;
+            const minEven = currentConfig.minEven || 6;
+            const minOdd = currentConfig.minOdd || 6;
+
+            if (martingale > 0) {
+                statusText = `Martingale ${martingale} - Aguardando resultado`;
+            } else if (evenCount > 0) {
+                statusText = `Aguardando pares: ${evenCount}/${minEven}`;
+            } else if (oddCount > 0) {
+                statusText = `Aguardando ímpares: ${oddCount}/${minOdd}`;
+            } else {
+                statusText = 'Aguardando sequência';
+            }
+        }
+        // Para estratégia OverUnder
+        else if (currentConfig.strategy === 'OverUnderStrategy') {
+            const consecutiveCount = state.consecutiveCount || 0;
+            const martingale = state.martingaleCount || 0;
+            const minConsecutive = currentConfig.minConsecutive || 3;
+            const waitFor = currentConfig.waitFor || 'UNDER';
+            const referenceDigit = currentConfig.referenceDigit || 3;
+
+            if (martingale > 0) {
+                // Verifica se está em modo de entrada contínua
+                if (state.martingaleActive) {
+                    const targetDigit = currentConfig.martingaleTargetDigit || 4;
+                    const entryType = state.lastEntryType || 'DIGITOVER';
+                    statusText = `Martingale ${martingale} - Entrada contínua ${entryType} ${targetDigit}`;
+                } else if (state.waitingForMartingaleSequence) {
+                    const martingaleSeqCount = state.martingaleSequenceCount || 0;
+                    const minMartingaleSeq = currentConfig.minMartingaleSequence || 2;
+                    const martingaleWaitFor = currentConfig.martingaleWaitFor || 'UNDER';
+                    const martingaleRefDigit = currentConfig.martingaleReferenceDigit || 5;
+                    statusText = `Martingale ${martingale} - Aguardando ${martingaleWaitFor} ${martingaleRefDigit}: ${martingaleSeqCount}/${minMartingaleSeq}`;
+                } else {
+                    statusText = `Martingale ${martingale} - Aguardando resultado`;
+                }
+            } else {
+                statusText = `Aguardando ${waitFor} ${referenceDigit}: ${consecutiveCount}/${minConsecutive}`;
+            }
+        }
+        // Fallback genérico
+        else {
+            statusText = 'Bot em execução';
+        }
+
+        statusContainer.textContent = statusText;
+    }
+}
+
+function generateStrategyConfigFields(strategyName) {
+    const container = document.getElementById('strategyConfigFields');
+    container.innerHTML = '';
+
+    if (!strategyName || !availableStrategies[strategyName] || !currentStrategySchema) {
+        return;
+    }
+
+    const schema = currentStrategySchema;
+    
+    Object.keys(schema).forEach(fieldName => {
+        const field = schema[fieldName];
+        const formGroup = document.createElement('div');
+        formGroup.className = 'form-group';
+
+        const label = document.createElement('label');
+        label.textContent = field.label || fieldName;
+        label.setAttribute('for', fieldName);
+        formGroup.appendChild(label);
+
+        let input;
+        if (field.type === 'select') {
+            input = document.createElement('select');
+            input.id = fieldName;
+            
+            field.options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option.value;
+                opt.textContent = option.label;
+                input.appendChild(opt);
+            });
+        } else {
+            input = document.createElement('input');
+            input.type = field.type || 'text';
+            input.id = fieldName;
+            
+            if (field.min !== undefined) input.min = field.min;
+            if (field.max !== undefined) input.max = field.max;
+            if (field.step !== undefined) input.step = field.step;
+        }
+
+        // Definir valor atual
+        if (currentConfig[fieldName] !== undefined) {
+            input.value = currentConfig[fieldName];
+        } else if (field.default !== undefined) {
+            input.value = field.default;
+        }
+
+        formGroup.appendChild(input);
+
+        // Adicionar help text se disponível
+        if (field.min !== undefined || field.max !== undefined) {
+            const helpText = document.createElement('div');
+            helpText.className = 'input-help';
+            let helpContent = '';
+            
+            if (field.min !== undefined && field.max !== undefined) {
+                helpContent = `Entre ${field.min} e ${field.max}`;
+            } else if (field.min !== undefined) {
+                helpContent = `Mínimo: ${field.min}`;
+            } else if (field.max !== undefined) {
+                helpContent = `Máximo: ${field.max}`;
+            }
+            
+            helpText.textContent = helpContent;
+            formGroup.appendChild(helpText);
+        }
+
+        container.appendChild(formGroup);
+    });
+}
+
+function changeStrategy() {
+    const selectedStrategy = document.getElementById('strategySelector').value;
+    if (selectedStrategy) {
+        socket.emit('change_strategy', selectedStrategy);
     }
 }
 
@@ -686,50 +863,44 @@ function stopBot() {
 }
 
 function updateConfig() {
-    const baseStake = parseFloat(document.getElementById('baseStake').value);
-    const multiplier = parseFloat(document.getElementById('multiplier').value);
-    const maxMartingale = parseInt(document.getElementById('maxMartingale').value);
-    const payout = parseFloat(document.getElementById('payout').value);
-    const minEven = parseInt(document.getElementById('minEven').value);
-    const minOdd = parseInt(document.getElementById('minOdd').value);
+    const config = {};
+
+    // Coletar configurações da estratégia atual
+    if (currentStrategySchema) {
+        Object.keys(currentStrategySchema).forEach(fieldName => {
+            const input = document.getElementById(fieldName);
+            if (input) {
+                const field = currentStrategySchema[fieldName];
+                if (field.type === 'number') {
+                    config[fieldName] = parseFloat(input.value) || field.default;
+                } else {
+                    config[fieldName] = input.value || field.default;
+                }
+            }
+        });
+    }
+
+    // Meta de lucro
     const profitGoalEnabled = document.getElementById('profitGoalEnabled').checked;
-    const profitGoal = profitGoalEnabled ? parseFloat(document.getElementById('profitGoal').value) : 0;
+    config.profitGoal = profitGoalEnabled ? parseFloat(document.getElementById('profitGoal').value) : 0;
 
     // Validações básicas no frontend
-    if (baseStake < 0.35) {
+    if (config.baseStake && config.baseStake < 0.35) {
         alert('Stake inicial deve ser no mínimo $0.35');
         return;
     }
-    if (multiplier < 1.1) {
+    if (config.multiplier && config.multiplier < 1.1) {
         alert('Multiplicador deve ser no mínimo 1.1');
         return;
     }
-    if (payout < 0.1 || payout > 5.0) {
+    if (config.payout && (config.payout < 0.1 || config.payout > 5.0)) {
         alert('Payout deve estar entre 0.1 e 5.0');
         return;
     }
-    if (minEven < 1 || minEven > 20) {
-        alert('Mínimo de pares deve estar entre 1 e 20');
-        return;
-    }
-    if (minOdd < 1 || minOdd > 20) {
-        alert('Mínimo de ímpares deve estar entre 1 e 20');
-        return;
-    }
-    if (profitGoalEnabled && profitGoal <= 0) {
+    if (profitGoalEnabled && config.profitGoal <= 0) {
         alert('Meta de lucro deve ser maior que 0 quando habilitada');
         return;
     }
-
-    const config = {
-        baseStake,
-        multiplier,
-        maxMartingale,
-        payout,
-        minEven,
-        minOdd,
-        profitGoal
-    };
 
     socket.emit('update_config', config);
 }

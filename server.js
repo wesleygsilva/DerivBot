@@ -20,10 +20,10 @@ const PORT = 3000;
 app.use(express.static(__dirname + "/public"));
 
 // =========================
-// CONFIG - Agora todas as configurações são dinâmicas
+// CONFIGURAÇÕES INICIAIS
 // =========================
 let config = {
-  strategy: "EvenOdd", // estratégia inicial
+  strategy: "EvenOddStrategy",
   contract_type: "DIGITODD",
   duration: 1,
   symbol: "1HZ10V",
@@ -34,6 +34,11 @@ let config = {
   minEven: 6,
   minOdd: 6,
   profitGoal: 0,
+  // OverUnder
+  waitFor: 'UNDER',
+  referenceDigit: 3,
+  targetDigit: 4,  // barrier
+  minConsecutive: 3,
 };
 
 // =========================
@@ -47,18 +52,18 @@ let botState = {
   balance: 0,
   initialBalance: 0,      
   stats: { profit: 0, totalTrades: 0, wins: 0, losses: 0 },
-  strategyState: {}, // Estado específico da estratégia
+  strategyState: {},
 };
 
 // =========================
-// INSTÂNCIAS DOS MÓDULOS
+// INSTÂNCIAS
 // =========================
 const logger = new Logger(io);
 const sequenceTracker = new SequenceTracker(logger);
 const derivAPI = new DerivAPI(logger);
 
 // =========================
-// CARREGAR ESTRATÉGIAS DINAMICAMENTE
+// CARREGAR ESTRATÉGIAS
 // =========================
 const strategies = {};
 const strategiesDir = path.join(__dirname, "strategies");
@@ -75,7 +80,7 @@ fs.readdirSync(strategiesDir).forEach(file => {
 let currentStrategy = strategies[config.strategy];
 
 // =========================
-// CONTROLE DE TRADES
+// TRADES LOCAIS
 // =========================
 let localTrades = {};
 let tradeCounter = 0;
@@ -88,9 +93,6 @@ function ensureValidNumber(value, defaultValue = 1.0) {
   return isNaN(num) || num <= 0 ? defaultValue : num;
 }
 
-// =========================
-// VERIFICAR META DE LUCRO
-// =========================
 function checkProfitGoal() {
   if (config.profitGoal > 0 && botState.stats.profit >= config.profitGoal) {
     botState.isRunning = false;
@@ -102,7 +104,7 @@ function checkProfitGoal() {
 }
 
 // =========================
-// TICKS E RESULTADOS
+// PROCESSAMENTO DE TICKS
 // =========================
 function handleTick(tick) {
   if (!botState.isRunning) return;
@@ -113,25 +115,19 @@ function handleTick(tick) {
   botState.lastDigits.push(lastDigit);
   if (botState.lastDigits.length > 20) botState.lastDigits.shift();
 
-  // Atualizar estatísticas de sequência
   sequenceTracker.updateSequenceStats(lastDigit);
-
-  // Resolver trades abertos
   resolveOpenTrades(lastDigit);
 
-  // Se a estratégia/parada foi acionada ao resolver trades (ex.: gale máximo),
-  // não processamos novas entradas neste mesmo tick.
   if (!botState.isRunning) {
     io.emit("botStateUpdate", botState);
     return;
   }
 
-  // Processar lógica da estratégia atual
   if (currentStrategy) {
     const decision = currentStrategy.processSignal(lastDigit, botState.strategyState);
     
     if (decision.shouldTrade) {
-      makeEntryAsync(lastDigit, decision.entryType, decision.reason);
+      makeEntryAsync(lastDigit, decision.entryType, decision.reason, decision.barrier);
     }
   }
 
@@ -139,55 +135,39 @@ function handleTick(tick) {
 }
 
 function resolveOpenTrades(lastDigit) {
-  // snapshot das chaves para evitar surpresas se localTrades for modificado durante o loop
   const tradeIds = Object.keys(localTrades);
 
   for (const id of tradeIds) {
     const trade = localTrades[id];
     if (trade && trade.status === "open") {
-      const isWin = (trade.entryType === "DIGITODD") ? lastDigit % 2 === 1 : lastDigit % 2 === 0;
-      
+      let isWin = false;
+
+      if (trade.entryType === "DIGITODD") isWin = lastDigit % 2 === 1;
+      else if (trade.entryType === "DIGITEVEN") isWin = lastDigit % 2 === 0;
+      else if (trade.entryType === "DIGITOVER") {
+        isWin = lastDigit > config.targetDigit;
+      } else if (trade.entryType === "DIGITUNDER") {
+        isWin = lastDigit < config.targetDigit;
+      }
+
       trade.resultDigit = lastDigit;
       trade.status = isWin ? "win" : "loss";     
 
       botState.stats.totalTrades++;
       if (isWin) {
         botState.stats.wins++;
-        // Log do resultado primeiro (assim aparece antes dos logs da estratégia)
-        logger.log(`Trade #${trade.id} WIN | Entrada após digito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`);
-
-        // Notificar estratégia sobre WIN (pode resetar estado)
-        if (currentStrategy) {
-          try {
-            currentStrategy.onTradeResult(trade, botState.strategyState, true);
-          } catch (err) {
-            logger.log(`Erro em onTradeResult (win): ${err.message}`, "error");
-          }
-        }
-
-        // Verificar meta de lucro após win
+        logger.log(`Trade #${trade.id} WIN | Entrada após dígito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`);
+        if (currentStrategy) currentStrategy.onTradeResult(trade, botState.strategyState, true);
         if (checkProfitGoal()) {
           io.emit("tradeResult", trade);
           return;
         }
       } else {
         botState.stats.losses++;
-        // Log do resultado primeiro (para aparecer antes do "Preparando Gale")
         logger.log(`Trade #${trade.id} LOSS | Entrada após dígito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`, "error");
-
-        // Notificar estratégia sobre LOSS
         if (currentStrategy) {
-          try {
-            const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false);
-            if (!shouldContinue) {
-              // estratégia pediu para parar => garantir que nenhuma nova entrada seja feita
-              botState.isRunning = false;
-              botState.makingEntry = false;
-              logger.log(`Estratégia interrompida. Bot parado.`, "error");
-            }
-          } catch (err) {
-            logger.log(`Erro em onTradeResult (loss): ${err.message}`, "error");
-          }
+          const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false);
+          if (!shouldContinue) botState.isRunning = false;
         }
       }
 
@@ -196,20 +176,18 @@ function resolveOpenTrades(lastDigit) {
   }
 }
 
-
 // =========================
 // FAZER ENTRADA
 // =========================
-function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "") {
+function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", barrier = null) {
   if (!botState.connected || !botState.isRunning) {
-    // garantir que flag de tentativa de entrada seja resetada
     botState.makingEntry = false;
     return;
   }
 
   const rawStake = currentStrategy ? currentStrategy.getCurrentStake(botState.strategyState) : config.baseStake;
   const stake = parseFloat(Number(rawStake).toFixed(2));
-  
+
   if (stake > botState.balance) {
     botState.isRunning = false;
     botState.makingEntry = false;
@@ -219,138 +197,124 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "") {
 
   const id = ++tradeCounter;
   localTrades[id] = {
-    id,
-    stake: stake,
-    entryDigit: lastDigit,
-    entryType,
-    status: "open",
-    timestamp: Date.now(),
-    reason: reason
-  };
+  id,
+  stake: stake,
+  entryDigit: lastDigit,
+  entryType,
+  barrier: barrier || config.targetDigit, // Armazenar o barrier específico
+  status: "open",
+  timestamp: Date.now(),
+  reason: reason
+};
 
-  const proposalRequest = {
+  // =============================
+  // Construir proposta para Deriv
+  // =============================
+  let proposalContractType = entryType;
+  const proposalData = {
     proposal: 1,
     amount: stake,
     basis: "stake",
-    contract_type: entryType,
+    contract_type: entryType, // será ajustado abaixo se precisar
     currency: "USD",
     duration: config.duration,
     duration_unit: "t",
     symbol: config.symbol
   };
 
+  // Para DIGITOVER/DIGITUNDER precisamos ajustar conforme o símbolo
+  if (entryType.startsWith("DIGITOVER") || entryType.startsWith("DIGITUNDER")) {
+    const targetDigit = barrier || config.targetDigit; // Usar o barrier passado como parâmetro
+    
+    // Se o símbolo for 1HZ10V ou similar, usamos barrier separado
+    if (config.symbol.startsWith("1HZ")) {
+      proposalData.contract_type = entryType.replace(/\d+$/, ""); // remove número do tipo
+      proposalData.barrier = targetDigit;
+    } else {
+      // Para R_100 e outros, o número vai junto no contract_type
+      proposalData.contract_type = entryType + targetDigit;
+      // não enviar barrier
+    }
+  }
+
   botState.makingEntry = true;
   try {
-    derivAPI.sendMessage(proposalRequest);
+    derivAPI.sendMessage(proposalData);
   } catch (error) {
     botState.makingEntry = false;
     logger.log("Erro ao enviar proposta", "error");
   }
 
   io.emit("tradePending", localTrades[id]);
-  logger.log(`Trade #${id} lançado | ${reason} | Entrada ${entryType} após dígito: ${lastDigit} | Stake: ${stake}`);
+  logger.log(`Trade #${id} lançado | ${reason} | Entrada ${proposalData.contract_type} após dígito: ${lastDigit} | Stake: ${stake}`);
 }
-
 
 // =========================
 // SOCKET.IO
 // =========================
 io.on("connection", (socket) => {
-  // Enviar estado e configurações para o cliente
   socket.emit("botStateUpdate", botState);
   socket.emit("configUpdate", config);
 
-  socket.on("connect_bot", (token) => {
-    if (!token || token.trim() === "") {
-      socket.emit("connectionError", "Token inválido");
-      return;
-    }
-    derivAPI.connect(token, handleAPIResponse);
-  });
-
+  socket.on("connect_bot", (token) => derivAPI.connect(token, handleAPIResponse));
   socket.on("start_bot", () => {
     if (!botState.connected) return;
     botState.isRunning = true;
     botState.makingEntry = false;
-    
-    // Reset da estratégia
-    if (currentStrategy) {
-      botState.strategyState = currentStrategy.reset();
-    }
-    
+    if (currentStrategy) botState.strategyState = currentStrategy.reset();
     logger.log("Bot iniciado");
     io.emit("botStateUpdate", botState);
   });
+  socket.on("stop_bot", () => { botState.isRunning = false; botState.makingEntry = false; logger.log("Bot parado", "warning"); io.emit("botStateUpdate", botState); });
 
-  socket.on("stop_bot", () => {
-    botState.isRunning = false;
-    botState.makingEntry = false;
-    logger.log("Bot parado", "warning");
-    io.emit("botStateUpdate", botState);
-  });
-
-  socket.on("update_config", (newConfig) => {
-    updateConfig(newConfig);
-  });
-
+  socket.on("update_config", updateConfig);
   socket.on("change_strategy", (strategyName) => {
     if (strategies[strategyName]) {
       config.strategy = strategyName;
       currentStrategy = strategies[strategyName];
       currentStrategy.updateConfig(config);
       botState.strategyState = currentStrategy.reset();
-      
-      logger.log(`Estratégia alterada para: ${strategyName}`);
+      logger.log(`Estratégia alterada para: ${currentStrategy.name}`);
+      socket.emit("currentStrategyInfo", { name: currentStrategy.name, description: getStrategyDescription(strategyName), schema: currentStrategy.getConfigSchema() });
       io.emit("configUpdate", config);
       io.emit("botStateUpdate", botState);
-    } else {
-      logger.log(`Estratégia '${strategyName}' não encontrada`, "error");
     }
   });
 
-  socket.on("reset_stats", () => {
-    resetStats();
+  socket.on("get_strategies", () => {
+    const info = {};
+    Object.keys(strategies).forEach(key => info[key] = { name: strategies[key].name, description: getStrategyDescription(key) });
+    socket.emit("strategiesUpdate", info);
+    if (currentStrategy) socket.emit("currentStrategyInfo", { name: currentStrategy.name, description: getStrategyDescription(config.strategy), schema: currentStrategy.getConfigSchema() });
   });
 
-  socket.on("clear_digits", () => {
-    botState.lastDigits = [];
-    logger.log("Dígitos limpos");
-    io.emit("botStateUpdate", botState);
-  });
+  socket.on("reset_stats", resetStats);
+  socket.on("clear_digits", () => { botState.lastDigits = []; logger.log("Dígitos limpos"); io.emit("botStateUpdate", botState); });
+  socket.on("get_config", () => socket.emit("configUpdate", config));
 
-  socket.on("get_config", () => {
-    socket.emit("configUpdate", config);
-  });
-
-  // Relatórios
   socket.on("download_full_log", () => {
     const report = logger.generateFullLogReport();
-    socket.emit("downloadFile", {
-      filename: `logs_completos_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`,
-      content: report,
-      type: "text/plain"
-    });
+    socket.emit("downloadFile", { filename: `logs_completos_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`, content: report, type: "text/plain" });
   });
-
   socket.on("download_sequence_report", () => {
     const report = sequenceTracker.generateSequenceReport();
-    socket.emit("downloadFile", {
-      filename: `relatorio_sequencias_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`,
-      content: report,
-      type: "text/plain"
-    });
+    socket.emit("downloadFile", { filename: `relatorio_sequencias_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`, content: report, type: "text/plain" });
   });
 });
 
 // =========================
-// HELPER FUNCTIONS
+// FUNÇÕES AUXILIARES
 // =========================
+function getStrategyDescription(strategyName) {
+  const desc = {
+    EvenOddStrategy: "Aguarda sequências de dígitos pares/ímpares para fazer entrada no oposto",
+    OverUnderStrategy: "Aguarda sequências de dígitos OVER/UNDER um valor específico para fazer entrada"
+  };
+  return desc[strategyName] || "Estratégia de trading automatizado";
+}
+
 function handleAPIResponse(response) {
-  if (response.error) {
-    botState.makingEntry = false;
-    logger.log(`Erro API: ${response.error.message}`, "error");
-    return;
-  }
+  if (response.error) { botState.makingEntry = false; logger.log(`Erro API: ${response.error.message}`, "error"); return; }
 
   if (response.authorize) {
     botState.connected = true;
@@ -362,98 +326,34 @@ function handleAPIResponse(response) {
 
   if (response.balance) {
     botState.balance = ensureValidNumber(response.balance.balance, 0);
-    
-    if (botState.initialBalance === 0) {
-      botState.initialBalance = botState.balance;
-      logger.log(`Saldo inicial definido: $${botState.initialBalance.toFixed(2)}`);
-    }
-    
-    botState.stats.profit = parseFloat(
-        (botState.balance - botState.initialBalance).toFixed(2)
-      );
-
+    if (botState.initialBalance === 0) botState.initialBalance = botState.balance;
+    botState.stats.profit = parseFloat((botState.balance - botState.initialBalance).toFixed(2));
     io.emit("botStateUpdate", botState);
   }
 
   if (response.proposal) {
-    const buyRequest = {
-      buy: response.proposal.id,
-      price: response.proposal.ask_price
-    };
-    try {
-      derivAPI.sendMessage(buyRequest);
-    } catch (err) {
-      botState.makingEntry = false;
-      logger.log("Erro ao enviar buy", "error");
-    }
+    derivAPI.sendMessage({ buy: response.proposal.id, price: response.proposal.ask_price });
   }
 
-  if (response.buy) {
-    botState.makingEntry = false;
-  }
-
-  if (response.tick) {
-    handleTick(response.tick);
-  }
+  if (response.buy) botState.makingEntry = false;
+  if (response.tick) handleTick(response.tick);
 }
 
 function updateConfig(newConfig) {
-  const baseStake = ensureValidNumber(newConfig.baseStake, 0.35);
-  const multiplier = ensureValidNumber(newConfig.multiplier, 2.0);
-  const maxMartingale = parseInt(newConfig.maxMartingale) || 5;
-  const payout = ensureValidNumber(newConfig.payout, 0.95);
-  const minEven = parseInt(newConfig.minEven) || 5;
-  const minOdd = parseInt(newConfig.minOdd) || 5;
-  const profitGoal = ensureValidNumber(newConfig.profitGoal, 0);
-
-  // Validações
-  if (baseStake < 0.35) {
-    logger.log("Stake inicial deve ser no mínimo $0.35", "error");
-    return;
-  }
-  if (multiplier < 1.1) {
-    logger.log("Multiplicador deve ser no mínimo 1.1", "error");
-    return;
-  }
-  if (payout < 0.1 || payout > 5.0) {
-    logger.log("Payout deve estar entre 0.1 e 5.0", "error");
-    return;
-  }
-
-  // Atualizar configurações
-  Object.assign(config, {
-    baseStake,
-    multiplier,
-    maxMartingale,
-    payout,
-    minEven,
-    minOdd,
-    profitGoal
-  });
-
-  // Atualizar estratégia atual
-  if (currentStrategy) {
-    currentStrategy.updateConfig(config);
-  }
-
-  logger.log("Configurações atualizadas com sucesso");
+  Object.assign(config, newConfig);
+  if (currentStrategy) currentStrategy.updateConfig(config);
+  logger.log("Configurações atualizadas");
   io.emit("botStateUpdate", botState);
   io.emit("configUpdate", config);
 }
 
 function resetStats() {
-  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0, initialBalance:0 };
+  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0 };
   botState.makingEntry = false;
   localTrades = {};
   tradeCounter = 0;
-  
-  // Reset da estratégia atual
-  if (currentStrategy) {
-    botState.strategyState = currentStrategy.reset();
-  }
-  
+  if (currentStrategy) botState.strategyState = currentStrategy.reset();
   sequenceTracker.reset();
-  
   logger.log("Estatísticas resetadas");
   io.emit("botStateUpdate", botState);
 }
