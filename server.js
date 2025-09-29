@@ -26,7 +26,7 @@ let config = {
   strategy: "EvenOddStrategy",
   contract_type: "DIGITODD",
   duration: 1,
-  symbol: "1HZ10V",
+  symbol: "R_100",
   baseStake: 0.35,
   multiplier: 2.2,
   maxMartingale: 8,
@@ -109,8 +109,8 @@ function checkProfitGoal() {
 function handleTick(tick) {
   if (!botState.isRunning) return;
 
-  const quote = tick.quote.toString();
-  const lastDigit = parseInt(quote.slice(-1));
+  const quote = Number(tick.quote).toFixed(2); // garante 2 casas decimais
+  const lastDigit = parseInt(quote.replace('.', '').slice(-1)); // pega o último dígito decimal
 
   botState.lastDigits.push(lastDigit);
   if (botState.lastDigits.length > 20) botState.lastDigits.shift();
@@ -125,7 +125,7 @@ function handleTick(tick) {
 
   if (currentStrategy) {
     const decision = currentStrategy.processSignal(lastDigit, botState.strategyState);
-    
+
     if (decision.shouldTrade) {
       makeEntryAsync(lastDigit, decision.entryType, decision.reason, decision.barrier);
     }
@@ -133,6 +133,7 @@ function handleTick(tick) {
 
   io.emit("botStateUpdate", botState);
 }
+
 
 function resolveOpenTrades(lastDigit) {
   const tradeIds = Object.keys(localTrades);
@@ -227,7 +228,7 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", b
     const targetDigit = barrier || config.targetDigit; // Usar o barrier passado como parâmetro
     
     // Se o símbolo for 1HZ10V ou similar, usamos barrier separado
-    if (config.symbol.startsWith("1HZ")) {
+    if (config.symbol.startsWith("R_")) {
       proposalData.contract_type = entryType.replace(/\d+$/, ""); // remove número do tipo
       proposalData.barrier = targetDigit;
     } else {
