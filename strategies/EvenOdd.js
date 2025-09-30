@@ -94,7 +94,7 @@ class EvenOddStrategy {
   /**
    * Processa o resultado de um trade
    */
-  onTradeResult(trade, state, isWin) {
+  onTradeResult(trade, state, isWin, botState) {
     if (isWin) {
       // WIN: Reset completo - volta ao estado inicial
       state.martingaleCount = 0;
@@ -116,6 +116,11 @@ class EvenOddStrategy {
         return true; // Continuar bot
       } else {
         // Gale máximo atingido
+        if (botState) {
+                botState.stats.totalfullred = (botState.stats.totalfullred || 0) + 1;
+                this.logger.log(`TotalFullRed ${botState.stats.totalfullred}`, "error");
+            }
+
         this.logger.log(`Gale máximo atingido. Revise a estratégia ou reinicie.`, "error");
         return false; // Parar bot
       }

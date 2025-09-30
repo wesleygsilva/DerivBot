@@ -45,7 +45,7 @@ let botState = {
   lastDigits: [],
   balance: 0,
   initialBalance: 0,      
-  stats: { profit: 0, totalTrades: 0, wins: 0, losses: 0 },
+  stats: { profit: 0, totalTrades: 0, wins: 0, losses: 0, totalfullred: 0 },
   strategyState: {}, // Estado específico da estratégia
 };
 
@@ -165,7 +165,7 @@ function resolveOpenTrades(lastDigit) {
         }
 
         // Verificar meta de lucro após win
-        if (checkProfitGoal()) {
+      if (checkProfitGoal()) {
           io.emit("tradeResult", trade);
           return;
         }
@@ -177,7 +177,7 @@ function resolveOpenTrades(lastDigit) {
         // Notificar estratégia sobre LOSS
         if (currentStrategy) {
           try {
-            const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false);
+            const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false, botState);
             if (!shouldContinue) {
               // estratégia pediu para parar => garantir que nenhuma nova entrada seja feita
               botState.isRunning = false;
@@ -435,12 +435,13 @@ function updateConfig(newConfig) {
 }
 
 function resetStats() {
-  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0, initialBalance:0 };
+  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0, totalfullred: 0 };
+  botState.initialBalance = 0;
   botState.makingEntry = false;
   localTrades = {};
   tradeCounter = 0;
   
-  // Reset da estratégia atual
+  // Reset da estratégia atual    
   if (currentStrategy) {
     botState.strategyState = currentStrategy.reset();
   }

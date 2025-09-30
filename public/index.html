@@ -389,6 +389,11 @@ body {
             <div class="status-label">Win Rate</div>
             <div class="status-value" id="winRate">0%</div>
         </div>
+        <div class="status-item">
+            <div class="status-label">Full Red</div>
+            <div class="status-value" id="fullRedCount">0</div>
+        </div>
+
     </div>
 
     <div class="main-content">
@@ -595,6 +600,7 @@ function updateInterface() {
     document.getElementById('lossesCount').textContent = botState.stats?.losses || 0;
     document.getElementById('totalTradesStats').textContent = botState.stats?.totalTrades || 0;
     document.getElementById('winRateStats').textContent = `${winRate}%`;
+    document.getElementById('fullRedCount').textContent = botState.stats?.totalfullred || 0;
 
     // Status atual
     document.getElementById('EvenCount').textContent = `${botState.waitingForEven || 0}/${currentConfig.minEven || 6}`;
