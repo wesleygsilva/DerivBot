@@ -37,7 +37,7 @@ let config = {
   // OverUnder
   waitFor: 'UNDER',
   referenceDigit: 3,
-  targetDigit: 4,  // barrier
+  targetDigit: 4,
   minConsecutive: 3,
 };
 
@@ -86,6 +86,11 @@ let localTrades = {};
 let tradeCounter = 0;
 
 // =========================
+// CONTROLE DE SUBSCRIÇÃO
+// =========================
+let currentTickSubscription = null;
+
+// =========================
 // UTILS
 // =========================
 function ensureValidNumber(value, defaultValue = 1.0) {
@@ -104,13 +109,34 @@ function checkProfitGoal() {
 }
 
 // =========================
+// SUBSCRIÇÃO DE TICKS
+// =========================
+function subscribeToTicks(symbol) {
+  if (!botState.connected) {
+    logger.log("Não é possível subscrever ticks: não conectado", "error");
+    return;
+  }
+
+  // Se já houver uma subscrição ativa para um símbolo diferente, cancelar
+  if (currentTickSubscription && currentTickSubscription !== symbol) {
+    logger.log(`Cancelando subscrição anterior: ${currentTickSubscription}`, "info");
+    derivAPI.sendMessage({ forget_all: "ticks" });
+  }
+
+  // Subscrever ao novo símbolo
+  logger.log(`Subscrevendo aos ticks: ${symbol}`, "info");
+  derivAPI.sendMessage({ ticks: symbol, subscribe: 1 });
+  currentTickSubscription = symbol;
+}
+
+// =========================
 // PROCESSAMENTO DE TICKS
 // =========================
 function handleTick(tick) {
   if (!botState.isRunning) return;
 
-  const quote = Number(tick.quote).toFixed(2); // garante 2 casas decimais
-  const lastDigit = parseInt(quote.replace('.', '').slice(-1)); // pega o último dígito decimal
+  const quote = Number(tick.quote).toFixed(2);
+  const lastDigit = parseInt(quote.replace('.', '').slice(-1));
 
   botState.lastDigits.push(lastDigit);
   if (botState.lastDigits.length > 20) botState.lastDigits.shift();
@@ -133,7 +159,6 @@ function handleTick(tick) {
 
   io.emit("botStateUpdate", botState);
 }
-
 
 function resolveOpenTrades(lastDigit) {
   const tradeIds = Object.keys(localTrades);
@@ -198,25 +223,22 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", b
 
   const id = ++tradeCounter;
   localTrades[id] = {
-  id,
-  stake: stake,
-  entryDigit: lastDigit,
-  entryType,
-  barrier: barrier || config.targetDigit, // Armazenar o barrier específico
-  status: "open",
-  timestamp: Date.now(),
-  reason: reason
-};
+    id,
+    stake: stake,
+    entryDigit: lastDigit,
+    entryType,
+    barrier: barrier || config.targetDigit,
+    status: "open",
+    timestamp: Date.now(),
+    reason: reason
+  };
 
-  // =============================
   // Construir proposta para Deriv
-  // =============================
-  let proposalContractType = entryType;
   const proposalData = {
     proposal: 1,
     amount: stake,
     basis: "stake",
-    contract_type: entryType, // será ajustado abaixo se precisar
+    contract_type: entryType,
     currency: "USD",
     duration: config.duration,
     duration_unit: "t",
@@ -225,16 +247,15 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", b
 
   // Para DIGITOVER/DIGITUNDER precisamos ajustar conforme o símbolo
   if (entryType.startsWith("DIGITOVER") || entryType.startsWith("DIGITUNDER")) {
-    const targetDigit = barrier || config.targetDigit; // Usar o barrier passado como parâmetro
+    const targetDigit = barrier || config.targetDigit;
     
-    // Se o símbolo for 1HZ10V ou similar, usamos barrier separado
-    if (config.symbol.startsWith("R_")) {
-      proposalData.contract_type = entryType.replace(/\d+$/, ""); // remove número do tipo
+    // Se o símbolo for 1HZ (1s), usamos barrier separado
+    if (config.symbol.startsWith("1HZ")) {
+      proposalData.contract_type = entryType.replace(/\d+$/, "");
       proposalData.barrier = targetDigit;
     } else {
-      // Para R_100 e outros, o número vai junto no contract_type
+      // Para R_ (volatilities normais), o número vai junto no contract_type
       proposalData.contract_type = entryType + targetDigit;
-      // não enviar barrier
     }
   }
 
@@ -257,18 +278,44 @@ io.on("connection", (socket) => {
   socket.emit("botStateUpdate", botState);
   socket.emit("configUpdate", config);
 
-  socket.on("connect_bot", (token) => derivAPI.connect(token, handleAPIResponse));
+  socket.on("connect_bot", (token) => {
+    derivAPI.connect(token, handleAPIResponse);
+  });
+
   socket.on("start_bot", () => {
-    if (!botState.connected) return;
+    if (!botState.connected) {
+      logger.log("Não é possível iniciar: não conectado", "error");
+      return;
+    }
     botState.isRunning = true;
     botState.makingEntry = false;
     if (currentStrategy) botState.strategyState = currentStrategy.reset();
     logger.log("Bot iniciado");
     io.emit("botStateUpdate", botState);
   });
-  socket.on("stop_bot", () => { botState.isRunning = false; botState.makingEntry = false; logger.log("Bot parado", "warning"); io.emit("botStateUpdate", botState); });
 
-  socket.on("update_config", updateConfig);
+  socket.on("stop_bot", () => {
+    botState.isRunning = false;
+    botState.makingEntry = false;
+    logger.log("Bot parado", "warning");
+    io.emit("botStateUpdate", botState);
+  });
+
+  socket.on("update_config", (newConfig) => {
+    const oldSymbol = config.symbol;
+    updateConfig(newConfig);
+    
+    // Se o símbolo mudou e estamos conectados, re-subscrever
+    if (newConfig.symbol && newConfig.symbol !== oldSymbol && botState.connected) {
+      logger.log(`Símbolo alterado: ${oldSymbol} → ${config.symbol}`, "info");
+      subscribeToTicks(config.symbol);
+      
+      // Limpar dígitos ao trocar de símbolo
+      botState.lastDigits = [];
+      io.emit("botStateUpdate", botState);
+    }
+  });
+
   socket.on("change_strategy", (strategyName) => {
     if (strategies[strategyName]) {
       config.strategy = strategyName;
@@ -276,7 +323,11 @@ io.on("connection", (socket) => {
       currentStrategy.updateConfig(config);
       botState.strategyState = currentStrategy.reset();
       logger.log(`Estratégia alterada para: ${currentStrategy.name}`);
-      socket.emit("currentStrategyInfo", { name: currentStrategy.name, description: getStrategyDescription(strategyName), schema: currentStrategy.getConfigSchema() });
+      socket.emit("currentStrategyInfo", {
+        name: currentStrategy.name,
+        description: getStrategyDescription(strategyName),
+        schema: currentStrategy.getConfigSchema()
+      });
       io.emit("configUpdate", config);
       io.emit("botStateUpdate", botState);
     }
@@ -284,22 +335,50 @@ io.on("connection", (socket) => {
 
   socket.on("get_strategies", () => {
     const info = {};
-    Object.keys(strategies).forEach(key => info[key] = { name: strategies[key].name, description: getStrategyDescription(key) });
+    Object.keys(strategies).forEach(key => {
+      info[key] = {
+        name: strategies[key].name,
+        description: getStrategyDescription(key)
+      };
+    });
     socket.emit("strategiesUpdate", info);
-    if (currentStrategy) socket.emit("currentStrategyInfo", { name: currentStrategy.name, description: getStrategyDescription(config.strategy), schema: currentStrategy.getConfigSchema() });
+    if (currentStrategy) {
+      socket.emit("currentStrategyInfo", {
+        name: currentStrategy.name,
+        description: getStrategyDescription(config.strategy),
+        schema: currentStrategy.getConfigSchema()
+      });
+    }
   });
 
   socket.on("reset_stats", resetStats);
-  socket.on("clear_digits", () => { botState.lastDigits = []; logger.log("Dígitos limpos"); io.emit("botStateUpdate", botState); });
-  socket.on("get_config", () => socket.emit("configUpdate", config));
+
+  socket.on("clear_digits", () => {
+    botState.lastDigits = [];
+    logger.log("Dígitos limpos");
+    io.emit("botStateUpdate", botState);
+  });
+
+  socket.on("get_config", () => {
+    socket.emit("configUpdate", config);
+  });
 
   socket.on("download_full_log", () => {
     const report = logger.generateFullLogReport();
-    socket.emit("downloadFile", { filename: `logs_completos_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`, content: report, type: "text/plain" });
+    socket.emit("downloadFile", {
+      filename: `logs_completos_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`,
+      content: report,
+      type: "text/plain"
+    });
   });
+
   socket.on("download_sequence_report", () => {
     const report = sequenceTracker.generateSequenceReport();
-    socket.emit("downloadFile", { filename: `relatorio_sequencias_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`, content: report, type: "text/plain" });
+    socket.emit("downloadFile", {
+      filename: `relatorio_sequencias_${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.txt`,
+      content: report,
+      type: "text/plain"
+    });
   });
 });
 
@@ -315,12 +394,16 @@ function getStrategyDescription(strategyName) {
 }
 
 function handleAPIResponse(response) {
-  if (response.error) { botState.makingEntry = false; logger.log(`Erro API: ${response.error.message}`, "error"); return; }
+  if (response.error) {
+    botState.makingEntry = false;
+    logger.log(`Erro API: ${response.error.message}`, "error");
+    return;
+  }
 
   if (response.authorize) {
     botState.connected = true;
     derivAPI.sendMessage({ balance: 1, subscribe: 1 });
-    derivAPI.sendMessage({ ticks: config.symbol, subscribe: 1 });
+    subscribeToTicks(config.symbol);
     io.emit("botStateUpdate", botState);
     logger.log("Conectado à Deriv API");
   }
@@ -336,8 +419,13 @@ function handleAPIResponse(response) {
     derivAPI.sendMessage({ buy: response.proposal.id, price: response.proposal.ask_price });
   }
 
-  if (response.buy) botState.makingEntry = false;
-  if (response.tick) handleTick(response.tick);
+  if (response.buy) {
+    botState.makingEntry = false;
+  }
+
+  if (response.tick) {
+    handleTick(response.tick);
+  }
 }
 
 function updateConfig(newConfig) {

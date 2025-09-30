@@ -160,7 +160,7 @@ class EvenOddStrategy {
         label: 'Mín. Ímpares Consecutivos',
         min: 1,
         max: 20,
-        default: 6
+        default: 3
       },
       baseStake: {
         type: 'number',
@@ -178,18 +178,10 @@ class EvenOddStrategy {
       },
       maxMartingale: {
         type: 'number',
-        label: 'Máx. Martingale',
+        label: 'Limite de Perda',
         min: 1,
         max: 15,
-        default: 8
-      },
-      payout: {
-        type: 'number',
-        label: 'Payout (%)',
-        min: 0.1,
-        max: 5.0,
-        step: 0.01,
-        default: 0.95
+        default: 6
       }
     };
   }
