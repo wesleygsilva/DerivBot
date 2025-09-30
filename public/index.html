@@ -19,6 +19,13 @@ body {
     min-height: 100vh;
 }
 
+
+.btn-reset {
+    background: #dc3545;
+    color: white;
+    margin-top: 8px;
+}
+
 .navbar {
     background: #1a1a1a;
     padding: 12px 24px;
@@ -453,10 +460,10 @@ body {
         </div>
 
         <!-- Lucro/Prejuízo -->
-        <div class="panel-section">
+        <!-- <div class="panel-section">
             <div class="section-title">Lucro/Prejuízo</div>
             <div class="value-display" id="profitDisplay">$0.00</div>
-        </div>
+        </div> -->
 
         <!-- Mercado -->
         <div class="panel-section">
@@ -525,6 +532,11 @@ body {
     <div class="right-panel">
         <div class="panel-section">
             <div class="section-title">Estatísticas</div>
+            <!-- Lucro/Prejuízo -->
+            <div class="panel-section">
+                <div class="section-title">Lucro/Prejuízo</div>
+                <div class="value-display" id="profitDisplay">$0.00</div>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-value" id="winsCount">0</div>
@@ -543,6 +555,7 @@ body {
                     <div class="stat-label">Win Rate</div>
                 </div>
             </div>
+            <button class="btn btn-reset" onclick="resetStats()">Reset Estatísticas</button>
         </div>
     </div>
 </div>
@@ -838,6 +851,12 @@ function downloadFullLog() {
 
 function downloadSequenceReport() {
     socket.emit('download_sequence_report');
+}
+
+function resetStats() {
+    if (confirm('Tem certeza que deseja resetar todas as estatísticas?')) {
+        socket.emit('reset_stats');
+    }
 }
 
 updateInterface();
