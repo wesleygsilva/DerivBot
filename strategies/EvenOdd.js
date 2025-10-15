@@ -92,6 +92,30 @@ class EvenOddStrategy {
   }
 
   /**
+   * Valida se o resultado do trade foi WIN ou LOSS
+   * @param {object} trade - Objeto do trade com { entryType, resultDigit }
+   * @returns {boolean} true se WIN, false se LOSS
+   */
+  validateTradeResult(trade) {
+    const { entryType, resultDigit } = trade;
+    
+    if (entryType === 'DIGITODD') {
+      // Para DIGITODD, o dígito precisa ser ÍMPAR (1, 3, 5, 7, 9)
+      const isWin = resultDigit % 2 === 1;
+      this.logger.log(`Validação DIGITODD: resultado ${resultDigit} ${isWin ? 'WIN' : 'LOSS'} (precisa ser ímpar)`, isWin ? 'success' : 'error');
+      return isWin;
+    } else if (entryType === 'DIGITEVEN') {
+      // Para DIGITEVEN, o dígito precisa ser PAR (0, 2, 4, 6, 8)
+      const isWin = resultDigit % 2 === 0;
+      this.logger.log(`Validação DIGITEVEN: resultado ${resultDigit} ${isWin ? 'WIN' : 'LOSS'} (precisa ser par)`, isWin ? 'success' : 'error');
+      return isWin;
+    }
+    
+    this.logger.log(`Tipo de entrada desconhecido: ${entryType}`, 'error');
+    return false;
+  }
+
+  /**
    * Processa o resultado de um trade
    */
   onTradeResult(trade, state, isWin) {
@@ -103,7 +127,7 @@ class EvenOddStrategy {
       state.waitingForOdd = 0;
       state.lastEntryType = null;
       
-      // this.logger.log(`Reset completo após WIN`);
+      this.logger.log(`WIN! Resetando estratégia para nova sequência`, "success");
       return true; // Continuar bot
     } else {
       // LOSS: Verificar se pode fazer martingale
@@ -153,7 +177,7 @@ class EvenOddStrategy {
         label: 'Mín. Pares Consecutivos',
         min: 1,
         max: 20,
-        default: 6
+        default: 3
       },
       minOdd: {
         type: 'number',

@@ -29,15 +29,15 @@ let config = {
   symbol: "R_100",
   baseStake: 0.35,
   multiplier: 2.2,
-  maxMartingale: 8,
+  maxMartingale: 6,
   payout: 0.95,
-  minEven: 6,
-  minOdd: 6,
+  minEven: 3,
+  minOdd: 3,
   profitGoal: 0,
   // OverUnder
   waitFor: 'UNDER',
   referenceDigit: 3,
-  targetDigit: 4,
+  targetDigit: 2,
   minConsecutive: 3,
 };
 
@@ -166,23 +166,29 @@ function resolveOpenTrades(lastDigit) {
   for (const id of tradeIds) {
     const trade = localTrades[id];
     if (trade && trade.status === "open") {
+      // Definir o dígito do resultado
+      trade.resultDigit = lastDigit;
+      
+      // MUDANÇA: Delegar validação para a estratégia
       let isWin = false;
-
-      if (trade.entryType === "DIGITODD") isWin = lastDigit % 2 === 1;
-      else if (trade.entryType === "DIGITEVEN") isWin = lastDigit % 2 === 0;
-      else if (trade.entryType === "DIGITOVER") {
-        isWin = lastDigit > config.targetDigit;
-      } else if (trade.entryType === "DIGITUNDER") {
-        isWin = lastDigit < config.targetDigit;
+      
+      if (currentStrategy && typeof currentStrategy.validateTradeResult === 'function') {
+        // Estratégia tem método de validação próprio
+        isWin = currentStrategy.validateTradeResult(trade);
+      } else {
+        // Fallback para estratégias sem validação própria (EvenOdd, etc)
+        if (trade.entryType === "DIGITODD") isWin = lastDigit % 2 === 1;
+        else if (trade.entryType === "DIGITEVEN") isWin = lastDigit % 2 === 0;
+        else if (trade.entryType === "DIGITOVER") isWin = lastDigit > trade.barrier;
+        else if (trade.entryType === "DIGITUNDER") isWin = lastDigit < trade.barrier;
       }
 
-      trade.resultDigit = lastDigit;
-      trade.status = isWin ? "win" : "loss";     
+      trade.status = isWin ? "win" : "loss";
 
       botState.stats.totalTrades++;
       if (isWin) {
         botState.stats.wins++;
-        logger.log(`Trade #${trade.id} WIN | Entrada após dígito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`);
+        logger.log(`Trade #${trade.id} (${trade.contract_id}) WIN | Entrada após dígito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`);
         if (currentStrategy) currentStrategy.onTradeResult(trade, botState.strategyState, true);
         if (checkProfitGoal()) {
           io.emit("tradeResult", trade);
@@ -190,7 +196,7 @@ function resolveOpenTrades(lastDigit) {
         }
       } else {
         botState.stats.losses++;
-        logger.log(`Trade #${trade.id} LOSS | Entrada após dígito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`, "error");
+        logger.log(`Trade #${trade.id} (${trade.contract_id}) LOSS | Entrada após dígito: ${trade.entryDigit} → Resultado: ${trade.resultDigit}`, "error");
         if (currentStrategy) {
           const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false);
           if (!shouldContinue) botState.isRunning = false;
@@ -230,7 +236,8 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", b
     barrier: barrier || config.targetDigit,
     status: "open",
     timestamp: Date.now(),
-    reason: reason
+    reason: reason,
+    contract_id: null  
   };
 
   // Construir proposta para Deriv
@@ -421,6 +428,15 @@ function handleAPIResponse(response) {
 
   if (response.buy) {
     botState.makingEntry = false;
+    
+    // Pegar o contract_id da COMPRA (não da venda)
+    const openTrades = Object.values(localTrades).filter(t => t.status === "open");
+    if (openTrades.length > 0) {
+      const lastTrade = openTrades[openTrades.length - 1];
+      lastTrade.contract_id = response.buy.contract_id;  // ID da compra
+      lastTrade.purchase_time = response.buy.purchase_time;  // Opcional: timestamp
+      logger.log(`Contract ID: ${response.buy.contract_id} vinculado ao Trade #${lastTrade.id}`);
+    }
   }
 
   if (response.tick) {

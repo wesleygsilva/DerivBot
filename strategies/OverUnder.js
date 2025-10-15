@@ -25,7 +25,7 @@ class OverUnderStrategy {
       martingaleTargetDigit: null,
       waitingForMartingaleSequence: false,
       martingaleSequenceCount: 0,
-      martingaleActive: false, // Novo estado para controle do martingale ativo
+      martingaleActive: false,
     };
   }
 
@@ -44,8 +44,8 @@ class OverUnderStrategy {
   processSignal(digit, state) {
     // Se está em martingale ativo, faz entrada a cada tick
     if (state.martingaleActive && state.martingaleCount > 0) {
-      const entryType = state.lastEntryType.includes('OVER') ? 'DIGITOVER' : 'DIGITUNDER';
-      const targetDigit = state.martingaleTargetDigit || this.config.martingaleTargetDigit;
+      const entryType = state.lastEntryType;
+      const targetDigit = state.martingaleTargetDigit;
       
       return {
         shouldTrade: true,
@@ -119,16 +119,19 @@ class OverUnderStrategy {
       if (state.martingaleSequenceCount >= this.config.minMartingaleSequence) {
         // Ativar modo martingale contínuo
         const entryType = this.config.martingaleWaitFor === 'UNDER' ? 'DIGITOVER' : 'DIGITUNDER';
+        
+        // CORREÇÃO: Definir PRIMEIRO o targetDigit e entryType no state
+        state.martingaleTargetDigit = this.config.martingaleTargetDigit;
+        state.lastEntryType = entryType;
         state.waitingForMartingaleSequence = false;
         state.martingaleSequenceCount = 0;
-        state.martingaleActive = true; // Ativar martingale contínuo
-        state.lastEntryType = entryType; // Salvar tipo para próximas entradas
+        state.martingaleActive = true;
 
         return {
           shouldTrade: true,
           entryType,
-          barrier: this.config.martingaleTargetDigit,
-          reason: `Martingale ${state.martingaleCount}: Sequência ${conditionName} atingida! Iniciando entrada contínua ${entryType} ${this.config.martingaleTargetDigit}`,
+          barrier: state.martingaleTargetDigit,
+          reason: `Martingale ${state.martingaleCount}: Sequência ${conditionName} atingida! Iniciando entrada contínua ${entryType} ${state.martingaleTargetDigit}`,
         };
       }
     } else {
@@ -150,7 +153,7 @@ class OverUnderStrategy {
       state.martingaleTargetDigit = null;
       state.waitingForMartingaleSequence = false;
       state.martingaleSequenceCount = 0;
-      state.martingaleActive = false; // Desativar martingale contínuo
+      state.martingaleActive = false;
       this.logger.log("WIN! Resetando estratégia para nova sequência", "success");
       return true;
     } else {
@@ -158,6 +161,8 @@ class OverUnderStrategy {
       if (state.martingaleCount < this.config.maxMartingale) {
         state.martingaleCount++;
         state.currentStake = parseFloat((state.currentStake * this.config.multiplier).toFixed(2));
+        
+        // CORREÇÃO: Atualizar o targetDigit no state ANTES de verificar sequência
         state.martingaleTargetDigit = this.config.martingaleTargetDigit;
         
         // Se tem configuração de sequência para martingale E não está em martingale ativo
@@ -168,11 +173,23 @@ class OverUnderStrategy {
           state.waitingForMartingaleSequence = true;
           state.martingaleSequenceCount = 0;
           state.martingaleActive = false;
+          
+          // CORREÇÃO: Atualizar o lastEntryType para o tipo de entrada do martingale
+          const martingaleEntryType = this.config.martingaleWaitFor === 'UNDER' ? 'DIGITOVER' : 'DIGITUNDER';
+          state.lastEntryType = martingaleEntryType;
+          
           this.logger.log(`Preparando Gale ${state.martingaleCount}/${this.config.maxMartingale} - Aguardando sequência ${this.config.martingaleWaitFor} ${this.config.martingaleReferenceDigit}`, "warning");
         } else {
           // Se não tem sequência configurada OU já está em martingale ativo: continuar direto
           state.martingaleActive = true;
-          this.logger.log(`Gale ${state.martingaleCount}/${this.config.maxMartingale} - Entrada contínua ativada`, "warning");
+          
+          // CORREÇÃO: Garantir que o lastEntryType esteja definido corretamente
+          if (!state.lastEntryType) {
+            const martingaleEntryType = this.config.martingaleWaitFor === 'UNDER' ? 'DIGITOVER' : 'DIGITUNDER';
+            state.lastEntryType = martingaleEntryType;
+          }
+          
+          this.logger.log(`Gale ${state.martingaleCount}/${this.config.maxMartingale} - Entrada contínua ativada com ${state.lastEntryType} ${state.martingaleTargetDigit}`, "warning");
         }
         
         return true;
@@ -187,6 +204,30 @@ class OverUnderStrategy {
 
   getCurrentStake(state) {
     return parseFloat(state.currentStake.toFixed(2));
+  }
+
+  /**
+   * Valida se o resultado do trade foi WIN ou LOSS
+   * @param {object} trade - Objeto do trade com { entryType, barrier, resultDigit }
+   * @returns {boolean} true se WIN, false se LOSS
+   */
+  validateTradeResult(trade) {
+    const { entryType, barrier, resultDigit } = trade;
+    
+    if (entryType === 'DIGITOVER') {
+      // Para DIGITOVER, o dígito precisa ser MAIOR que a barreira
+      const isWin = resultDigit > barrier;
+      this.logger.log(`Validação DIGITOVER ${barrier}: resultado ${resultDigit} ${isWin ? 'WIN' : 'LOSS'} (precisa ser > ${barrier})`, isWin ? 'success' : 'error');
+      return isWin;
+    } else if (entryType === 'DIGITUNDER') {
+      // Para DIGITUNDER, o dígito precisa ser MENOR que a barreira
+      const isWin = resultDigit < barrier;
+      this.logger.log(`Validação DIGITUNDER ${barrier}: resultado ${resultDigit} ${isWin ? 'WIN' : 'LOSS'} (precisa ser < ${barrier})`, isWin ? 'success' : 'error');
+      return isWin;
+    }
+    
+    this.logger.log(`Tipo de entrada desconhecido: ${entryType}`, 'error');
+    return false;
   }
 
   getConfigSchema() {
@@ -220,7 +261,7 @@ class OverUnderStrategy {
         label: 'Qtd. Consecutivos Necessários', 
         min: 1, 
         max: 20, 
-        default: 3 
+        default: 1 
       },
       
       // Configurações do martingale
@@ -252,7 +293,7 @@ class OverUnderStrategy {
         label: 'Martingale - Qtd. Consecutivos', 
         min: 0, 
         max: 20, 
-        default: 2 
+        default: 3 
       },
       
       // Configurações gerais
@@ -275,7 +316,7 @@ class OverUnderStrategy {
         label: 'Máx. Martingale', 
         min: 1, 
         max: 15, 
-        default: 8 
+        default: 6 
       },
       payout: { 
         type: 'number', 

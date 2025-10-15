@@ -561,302 +561,302 @@ body {
 </div>
 
 <script>
-const socket = io();
-let botState = {};
-let currentConfig = {};
-let availableStrategies = {};
-let currentStrategySchema = {};
+    const socket = io();
+    let botState = {};
+    let currentConfig = {};
+    let availableStrategies = {};
+    let currentStrategySchema = {};
 
-socket.on('botStateUpdate', (state) => {
-    botState = state;
-    updateInterface();
-});
-
-socket.on('configUpdate', (config) => {
-    currentConfig = config;
-    updateConfigInterface();
-    updateInterface();
-});
-
-socket.on('strategiesUpdate', (strategies) => {
-    availableStrategies = strategies;
-    updateStrategySelector();
-});
-
-socket.on('currentStrategyInfo', (info) => {
-    updateStrategyInfo(info);
-});
-
-socket.on('newLog', (log) => {
-    addLogToInterface(log);
-});
-
-socket.on('downloadFile', (fileData) => {
-    downloadFile(fileData.filename, fileData.content, fileData.type);
-});
-
-socket.on('connect', () => {
-    socket.emit('get_config');
-    socket.emit('get_strategies');
-});
-
-function updateInterface() {
-    // Conexão
-    const statusEl = document.getElementById('connectionStatus');
-    if (botState.connected) {
-        statusEl.textContent = 'Conectado';
-        statusEl.className = 'connection-status connected';
-        document.getElementById('startBtn').disabled = false;
-        document.getElementById('stopBtn').disabled = false;
-    } else {
-        statusEl.textContent = 'Desconectado';
-        statusEl.className = 'connection-status disconnected';
-        document.getElementById('startBtn').disabled = true;
-        document.getElementById('stopBtn').disabled = true;
-    }
-
-    // Saldo
-    const balance = (botState.balance || 0).toFixed(2);
-    document.getElementById('navBalance').textContent = `$${balance}`;
-
-    // Lucro/Prejuízo
-    const profitEl = document.getElementById('profitDisplay');
-    const profit = botState.stats?.profit || 0;
-    profitEl.textContent = `$${profit.toFixed(2)}`;
-    profitEl.className = profit >= 0 ? 'value-display positive' : 'value-display negative';
-
-    // Estatísticas
-    document.getElementById('winsCount').textContent = botState.stats?.wins || 0;
-    document.getElementById('lossesCount').textContent = botState.stats?.losses || 0;
-    document.getElementById('totalTradesStats').textContent = botState.stats?.totalTrades || 0;
-    
-    const totalTrades = botState.stats?.totalTrades || 0;
-    const wins = botState.stats?.wins || 0;
-    const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : 0;
-    document.getElementById('winRateStats').textContent = `${winRate}%`;
-
-    // Dígitos
-    const digitsContainer = document.getElementById('digitsDisplay');
-    digitsContainer.innerHTML = '';
-    if (botState.lastDigits && botState.lastDigits.length > 0) {
-        botState.lastDigits.forEach(digit => {
-            const digitEl = document.createElement('div');
-            digitEl.className = `digit ${digit % 2 === 0 ? 'even' : 'odd'}`;
-            digitEl.textContent = digit;
-            digitsContainer.appendChild(digitEl);
-        });
-    }
-}
-
-function updateStrategySelector() {
-    const selector = document.getElementById('strategySelector');
-    selector.innerHTML = '<option value="">Selecione</option>';
-    
-    Object.keys(availableStrategies).forEach(strategyName => {
-        const option = document.createElement('option');
-        option.value = strategyName;
-        option.textContent = availableStrategies[strategyName].name || strategyName;
-        selector.appendChild(option);
+    socket.on('botStateUpdate', (state) => {
+        botState = state;
+        updateInterface();
     });
 
-    if (currentConfig.strategy) {
-        selector.value = currentConfig.strategy;
-    }
-}
+    socket.on('configUpdate', (config) => {
+        currentConfig = config;
+        updateConfigInterface();
+        updateInterface();
+    });
 
-function updateConfigInterface() {
-    const profitGoalEnabled = currentConfig.profitGoal && currentConfig.profitGoal > 0;
-    document.getElementById('profitGoalEnabled').checked = profitGoalEnabled;
-    document.getElementById('profitGoal').disabled = !profitGoalEnabled;
-    
-    if (currentConfig.profitGoal !== undefined) {
-        document.getElementById('profitGoal').value = currentConfig.profitGoal > 0 ? currentConfig.profitGoal.toFixed(2) : '10.00';
+    socket.on('strategiesUpdate', (strategies) => {
+        availableStrategies = strategies;
+        updateStrategySelector();
+    });
+
+    socket.on('currentStrategyInfo', (info) => {
+        updateStrategyInfo(info);
+    });
+
+    socket.on('newLog', (log) => {
+        addLogToInterface(log);
+    });
+
+    socket.on('downloadFile', (fileData) => {
+        downloadFile(fileData.filename, fileData.content, fileData.type);
+    });
+
+    socket.on('connect', () => {
+        socket.emit('get_config');
+        socket.emit('get_strategies');
+    });
+
+    function updateInterface() {
+        // Conexão
+        const statusEl = document.getElementById('connectionStatus');
+        if (botState.connected) {
+            statusEl.textContent = 'Conectado';
+            statusEl.className = 'connection-status connected';
+            document.getElementById('startBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = false;
+        } else {
+            statusEl.textContent = 'Desconectado';
+            statusEl.className = 'connection-status disconnected';
+            document.getElementById('startBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = true;
+        }
+
+        // Saldo
+        const balance = (botState.balance || 0).toFixed(2);
+        document.getElementById('navBalance').textContent = `$${balance}`;
+
+        // Lucro/Prejuízo
+        const profitEl = document.getElementById('profitDisplay');
+        const profit = botState.stats?.profit || 0;
+        profitEl.textContent = `$${profit.toFixed(2)}`;
+        profitEl.className = profit >= 0 ? 'value-display positive' : 'value-display negative';
+
+        // Estatísticas
+        document.getElementById('winsCount').textContent = botState.stats?.wins || 0;
+        document.getElementById('lossesCount').textContent = botState.stats?.losses || 0;
+        document.getElementById('totalTradesStats').textContent = botState.stats?.totalTrades || 0;
+        
+        const totalTrades = botState.stats?.totalTrades || 0;
+        const wins = botState.stats?.wins || 0;
+        const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : 0;
+        document.getElementById('winRateStats').textContent = `${winRate}%`;
+
+        // Dígitos
+        const digitsContainer = document.getElementById('digitsDisplay');
+        digitsContainer.innerHTML = '';
+        if (botState.lastDigits && botState.lastDigits.length > 0) {
+            botState.lastDigits.forEach(digit => {
+                const digitEl = document.createElement('div');
+                digitEl.className = `digit ${digit % 2 === 0 ? 'even' : 'odd'}`;
+                digitEl.textContent = digit;
+                digitsContainer.appendChild(digitEl);
+            });
+        }
     }
 
-    if (currentConfig.symbol) {
-        document.getElementById('symbolSelector').value = currentConfig.symbol;
+    function updateStrategySelector() {
+        const selector = document.getElementById('strategySelector');
+        selector.innerHTML = '<option value="">Selecione</option>';
+        
+        Object.keys(availableStrategies).forEach(strategyName => {
+            const option = document.createElement('option');
+            option.value = strategyName;
+            option.textContent = availableStrategies[strategyName].name || strategyName;
+            selector.appendChild(option);
+        });
+
+        if (currentConfig.strategy) {
+            selector.value = currentConfig.strategy;
+        }
     }
 
-    if (currentConfig.strategy && availableStrategies[currentConfig.strategy]) {
+    function updateConfigInterface() {
+        const profitGoalEnabled = currentConfig.profitGoal && currentConfig.profitGoal > 0;
+        document.getElementById('profitGoalEnabled').checked = profitGoalEnabled;
+        document.getElementById('profitGoal').disabled = !profitGoalEnabled;
+        
+        if (currentConfig.profitGoal !== undefined) {
+            document.getElementById('profitGoal').value = currentConfig.profitGoal > 0 ? currentConfig.profitGoal.toFixed(2) : '10.00';
+        }
+
+        if (currentConfig.symbol) {
+            document.getElementById('symbolSelector').value = currentConfig.symbol;
+        }
+
+        if (currentConfig.strategy && availableStrategies[currentConfig.strategy]) {
+            generateStrategyConfigFields(currentConfig.strategy);
+        }
+    }
+
+    function updateStrategyInfo(info) {
+        currentStrategySchema = info.schema || {};
+        document.getElementById('strategyDescription').textContent = info.description || 'Estratégia de trading';
         generateStrategyConfigFields(currentConfig.strategy);
     }
-}
 
-function updateStrategyInfo(info) {
-    currentStrategySchema = info.schema || {};
-    document.getElementById('strategyDescription').textContent = info.description || 'Estratégia de trading';
-    generateStrategyConfigFields(currentConfig.strategy);
-}
+    function generateStrategyConfigFields(strategyName) {
+        const container = document.getElementById('strategyConfigFields');
+        container.innerHTML = '';
 
-function generateStrategyConfigFields(strategyName) {
-    const container = document.getElementById('strategyConfigFields');
-    container.innerHTML = '';
-
-    if (!strategyName || !currentStrategySchema || Object.keys(currentStrategySchema).length === 0) {
-        return;
-    }
-
-    // Adicionar título das configurações
-    const titleDiv = document.createElement('div');
-    titleDiv.className = 'section-title';
-    titleDiv.style.marginTop = '8px';
-    titleDiv.textContent = 'CONFIGURAÇÕES';
-    container.appendChild(titleDiv);
-
-    Object.keys(currentStrategySchema).forEach(fieldName => {
-        const field = currentStrategySchema[fieldName];
-        const formGroup = document.createElement('div');
-        formGroup.className = 'form-group';
-
-        const label = document.createElement('label');
-        label.textContent = field.label || fieldName;
-        formGroup.appendChild(label);
-
-        let input;
-        if (field.type === 'select') {
-            input = document.createElement('select');
-            input.id = fieldName;
-            field.options.forEach(option => {
-                const opt = document.createElement('option');
-                opt.value = option.value;
-                opt.textContent = option.label;
-                input.appendChild(opt);
-            });
-        } else {
-            input = document.createElement('input');
-            input.type = field.type || 'text';
-            input.id = fieldName;
-            if (field.min !== undefined) input.min = field.min;
-            if (field.max !== undefined) input.max = field.max;
-            if (field.step !== undefined) input.step = field.step;
+        if (!strategyName || !currentStrategySchema || Object.keys(currentStrategySchema).length === 0) {
+            return;
         }
 
-        if (currentConfig[fieldName] !== undefined) {
-            input.value = currentConfig[fieldName];
-        } else if (field.default !== undefined) {
-            input.value = field.default;
-        }
+        // Adicionar título das configurações
+        const titleDiv = document.createElement('div');
+        titleDiv.className = 'section-title';
+        titleDiv.style.marginTop = '8px';
+        titleDiv.textContent = 'CONFIGURAÇÕES';
+        container.appendChild(titleDiv);
 
-        formGroup.appendChild(input);
-
-        if (field.min !== undefined || field.max !== undefined) {
-            const helpText = document.createElement('div');
-            helpText.className = 'input-help';
-            let helpContent = '';
-            if (field.min !== undefined && field.max !== undefined) {
-                helpContent = `Entre ${field.min} e ${field.max}`;
-            } else if (field.min !== undefined) {
-                helpContent = `Mínimo: ${field.min}`;
-            } else if (field.max !== undefined) {
-                helpContent = `Máximo: ${field.max}`;
-            }
-            helpText.textContent = helpContent;
-            formGroup.appendChild(helpText);
-        }
-
-        container.appendChild(formGroup);
-    });
-
-    console.log('Campos gerados:', Object.keys(currentStrategySchema).length);
-}
-
-function changeStrategy() {
-    const selectedStrategy = document.getElementById('strategySelector').value;
-    console.log('Mudando estratégia para:', selectedStrategy);
-    if (selectedStrategy) {
-        socket.emit('change_strategy', selectedStrategy);
-    }
-}
-
-function addLogToInterface(log) {
-    const logsContainer = document.getElementById('logsContainer');
-    const logEl = document.createElement('div');
-    logEl.className = `log-entry ${log.type}`;
-    logEl.innerHTML = `<strong>${log.timestamp}</strong> ${log.message}`;
-    logsContainer.insertBefore(logEl, logsContainer.firstChild);
-
-    while (logsContainer.children.length > 50) {
-        logsContainer.removeChild(logsContainer.lastChild);
-    }
-}
-
-function toggleProfitGoal() {
-    const checkbox = document.getElementById('profitGoalEnabled');
-    const input = document.getElementById('profitGoal');
-    input.disabled = !checkbox.checked;
-}
-
-function clearLogs() {
-    document.getElementById('logsContainer').innerHTML = '';
-}
-
-function clearDigits() {
-    socket.emit('clear_digits');
-}
-
-function connectBot() {
-    const token = document.getElementById('apiToken').value;
-    if (!token) {
-        alert('Insira o token da API');
-        return;
-    }
-    socket.emit('connect_bot', token);
-}
-
-function startBot() {
-    // Atualizar configurações antes de iniciar
-    const config = {};
-    
-    if (currentStrategySchema) {
         Object.keys(currentStrategySchema).forEach(fieldName => {
-            const input = document.getElementById(fieldName);
-            if (input) {
-                const field = currentStrategySchema[fieldName];
-                if (field.type === 'number') {
-                    config[fieldName] = parseFloat(input.value) || field.default;
-                } else {
-                    config[fieldName] = input.value || field.default;
-                }
+            const field = currentStrategySchema[fieldName];
+            const formGroup = document.createElement('div');
+            formGroup.className = 'form-group';
+
+            const label = document.createElement('label');
+            label.textContent = field.label || fieldName;
+            formGroup.appendChild(label);
+
+            let input;
+            if (field.type === 'select') {
+                input = document.createElement('select');
+                input.id = fieldName;
+                field.options.forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option.value;
+                    opt.textContent = option.label;
+                    input.appendChild(opt);
+                });
+            } else {
+                input = document.createElement('input');
+                input.type = field.type || 'text';
+                input.id = fieldName;
+                if (field.min !== undefined) input.min = field.min;
+                if (field.max !== undefined) input.max = field.max;
+                if (field.step !== undefined) input.step = field.step;
             }
+
+            if (currentConfig[fieldName] !== undefined) {
+                input.value = currentConfig[fieldName];
+            } else if (field.default !== undefined) {
+                input.value = field.default;
+            }
+
+            formGroup.appendChild(input);
+
+            if (field.min !== undefined || field.max !== undefined) {
+                const helpText = document.createElement('div');
+                helpText.className = 'input-help';
+                let helpContent = '';
+                if (field.min !== undefined && field.max !== undefined) {
+                    helpContent = `Entre ${field.min} e ${field.max}`;
+                } else if (field.min !== undefined) {
+                    helpContent = `Mínimo: ${field.min}`;
+                } else if (field.max !== undefined) {
+                    helpContent = `Máximo: ${field.max}`;
+                }
+                helpText.textContent = helpContent;
+                formGroup.appendChild(helpText);
+            }
+
+            container.appendChild(formGroup);
         });
+
+        console.log('Campos gerados:', Object.keys(currentStrategySchema).length);
     }
 
-    const profitGoalEnabled = document.getElementById('profitGoalEnabled').checked;
-    config.profitGoal = profitGoalEnabled ? parseFloat(document.getElementById('profitGoal').value) : 0;
-    config.symbol = document.getElementById('symbolSelector').value;
-
-    socket.emit('update_config', config);
-    socket.emit('start_bot');
-}
-
-function stopBot() {
-    socket.emit('stop_bot');
-}
-
-function downloadFile(filename, content, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-}
-
-function downloadFullLog() {
-    socket.emit('download_full_log');
-}
-
-function downloadSequenceReport() {
-    socket.emit('download_sequence_report');
-}
-
-function resetStats() {
-    if (confirm('Tem certeza que deseja resetar todas as estatísticas?')) {
-        socket.emit('reset_stats');
+    function changeStrategy() {
+        const selectedStrategy = document.getElementById('strategySelector').value;
+        console.log('Mudando estratégia para:', selectedStrategy);
+        if (selectedStrategy) {
+            socket.emit('change_strategy', selectedStrategy);
+        }
     }
+
+    function addLogToInterface(log) {
+        const logsContainer = document.getElementById('logsContainer');
+        const logEl = document.createElement('div');
+        logEl.className = `log-entry ${log.type}`;
+        logEl.innerHTML = `<strong>${log.timestamp}</strong> ${log.message}`;
+        logsContainer.insertBefore(logEl, logsContainer.firstChild);
+
+        while (logsContainer.children.length > 50) {
+            logsContainer.removeChild(logsContainer.lastChild);
+        }
+    }
+
+    function toggleProfitGoal() {
+        const checkbox = document.getElementById('profitGoalEnabled');
+        const input = document.getElementById('profitGoal');
+        input.disabled = !checkbox.checked;
+    }
+
+    function clearLogs() {
+        document.getElementById('logsContainer').innerHTML = '';
+    }
+
+    function clearDigits() {
+        socket.emit('clear_digits');
+    }
+
+    function connectBot() {
+        const token = 'NSZPzUBXPi37dnV'; //document.getElementById('apiToken').value;
+        if (!token) {
+            alert('Insira o token da API');
+            return;
+        }
+        socket.emit('connect_bot', token);
+    }
+
+    function startBot() {
+        // Atualizar configurações antes de iniciar
+        const config = {};
+        
+        if (currentStrategySchema) {
+            Object.keys(currentStrategySchema).forEach(fieldName => {
+                const input = document.getElementById(fieldName);
+                if (input) {
+                    const field = currentStrategySchema[fieldName];
+                    if (field.type === 'number') {
+                        config[fieldName] = parseFloat(input.value) || field.default;
+                    } else {
+                        config[fieldName] = input.value || field.default;
+                    }
+                }
+            });
+        }
+
+        const profitGoalEnabled = document.getElementById('profitGoalEnabled').checked;
+        config.profitGoal = profitGoalEnabled ? parseFloat(document.getElementById('profitGoal').value) : 0;
+        config.symbol = document.getElementById('symbolSelector').value;
+
+        socket.emit('update_config', config);
+        socket.emit('start_bot');
+    }
+
+    function stopBot() {
+        socket.emit('stop_bot');
+    }
+
+    function downloadFile(filename, content, mimeType) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    }
+
+    function downloadFullLog() {
+        socket.emit('download_full_log');
+    }
+
+    function downloadSequenceReport() {
+        socket.emit('download_sequence_report');
+    }
+
+    function resetStats() {
+        if (confirm('Tem certeza que deseja resetar todas as estatísticas?')) {
+            socket.emit('reset_stats');
+        }
 }
 
 updateInterface();
