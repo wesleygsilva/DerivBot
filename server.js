@@ -453,7 +453,7 @@ function updateConfig(newConfig) {
 }
 
 function resetStats() {
-  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0 };
+  botState.stats = { profit: 0, totalTrades: 0, wins: 0, losses: 0, profitGoal: 0 };
   botState.makingEntry = false;
   localTrades = {};
   tradeCounter = 0;
