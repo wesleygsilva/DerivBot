@@ -20,6 +20,11 @@ const PORT = 3000;
 app.use(express.static(__dirname + "/public"));
 
 // =========================
+// TOKEN PARA AUTO-CONEXÃO
+// =========================
+const AUTO_CONNECT_TOKEN = "NSZPzUBXPi37dnV"; // Token provisório
+
+// =========================
 // CONFIGURAÇÕES INICIAIS
 // =========================
 let config = {
@@ -91,6 +96,12 @@ let tradeCounter = 0;
 let currentTickSubscription = null;
 
 // =========================
+// AUTO-CONEXÃO À DERIV API
+// =========================
+derivAPI.connect(AUTO_CONNECT_TOKEN, handleAPIResponse);
+logger.log("Tentando auto-conectar à Deriv API...");
+
+// =========================
 // UTILS
 // =========================
 function ensureValidNumber(value, defaultValue = 1.0) {
@@ -133,8 +144,6 @@ function subscribeToTicks(symbol) {
 // PROCESSAMENTO DE TICKS
 // =========================
 function handleTick(tick) {
-  if (!botState.isRunning) return;
-
   const quote = Number(tick.quote).toFixed(2);
   const lastDigit = parseInt(quote.replace('.', '').slice(-1));
 
@@ -393,7 +402,7 @@ function getStrategyDescription(strategyName) {
   const desc = {
     ParityAI: "Aguarda sequências de dígitos pares/ímpares para fazer entrada no oposto",
     OverUnderStrategy: "Aguarda sequências de dígitos OVER/UNDER um valor específico para fazer entrada",
-    IAZeus: "Entra sempre over 3. A espera para reentrar após uma perda é definida pelos modos de negociação."
+    ZeusAI: "Entra sempre over 3. A espera para reentrar após uma perda é definida pelos modos de negociação."
   };
   return desc[strategyName] || "";
 }

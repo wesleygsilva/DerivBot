@@ -628,8 +628,13 @@ body {
     socket.on('connect', () => {
         socket.emit('get_config');
         socket.emit('get_strategies');
-        connectBot(); // Automatically connect on page load
     });
+
+    function changeSymbol() {
+        const newSymbol = document.getElementById('symbolSelector').value;
+        socket.emit('update_config', { symbol: newSymbol });
+        clearDigits(); // Clear digits immediately on client side when changing symbol
+    }
 
     function updateInterface() {
         // Conexão
@@ -667,6 +672,7 @@ body {
         document.getElementById('winRateStats').textContent = `${winRate}%`;
 
         // Dígitos
+        console.log('botState.lastDigits on updateInterface:', botState.lastDigits);
         const digitsContainer = document.getElementById('digitsDisplay');
         digitsContainer.innerHTML = '';
         if (botState.lastDigits && botState.lastDigits.length > 0) {

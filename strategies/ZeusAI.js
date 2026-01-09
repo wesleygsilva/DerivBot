@@ -1,12 +1,12 @@
 /**
- * Estratégia IA Zeus
+ * Estratégia ZeusAI
  * 
  * Lógica: 
  * - Entra sempre Over 3.
  * - Modos de negociação definem a espera após uma perda.
  */
 
-class IAZeus {
+class ZeusAI {
   constructor(config, logger) {
     this.config = config;
     this.logger = logger;
@@ -38,24 +38,24 @@ class IAZeus {
       // If waiting after a loss, check if current digit is a losing digit (not over 3)
       if (!this.isOver(digit, 3)) { // If digit is 0, 1, 2, 3
         state.lossStreak++;
-        this.logger.log(`Aguardando perdedores: ${state.lossStreak}/${lossWaitCount}`);
+        this.logger.log(`Aguardando sequência de dígitos under 4: ${state.lossStreak}/${lossWaitCount}`);
         if (state.lossStreak >= lossWaitCount) {
           state.isWaitingAfterLoss = false;
           state.lossStreak = 0;
           state.martingaleActive = true; // Martingale sequence is now active, so subsequent trades are automatic
-          this.logger.log(`Sequência de perdedores atingida. Gale ativo, reiniciando entradas.`);
+          this.logger.log(`Sequência de dígitos under 4 atingida. Gale ativo, reiniciando entradas.`);
           
           // IMMEDIATE ENTRY: Return shouldTrade: true right after meeting the condition
           return {
             shouldTrade: true,
             entryType: "DIGITOVER",
             barrier: 3,
-            reason: "IA Zeus: Entrada Over 3 (após aguardar sequência de perdedores)"
+            reason: "ZeusAI: Entrada Over 3 (após aguardar sequência de dígitos under 4)"
           };
         }
       } else {
         state.lossStreak = 0; // Reset streak if a winning digit (over 3) appears while waiting
-        this.logger.log(`Dígito vencedor ${digit} enquanto aguardava. Resetando contagem de perdedores.`);
+        this.logger.log(`Dígito vencedor ${digit} enquanto aguardava. Resetando contagem de dígitos under 4.`);
       }
       return { shouldTrade: false }; // Do not trade while waiting (if condition not met yet)
     }
@@ -65,7 +65,7 @@ class IAZeus {
       shouldTrade: true,
       entryType: "DIGITOVER",
       barrier: 3,
-      reason: "IA Zeus: Entrada Over 3"
+      reason: "ZeusAI: Entrada Over 3"
     };
   }
 
@@ -93,7 +93,7 @@ class IAZeus {
       if (!state.martingaleActive && lossWaitCount > 0) {
         state.isWaitingAfterLoss = true; // Start waiting for losing digits
         state.lossStreak = 0;
-        this.logger.log(`Derrota. Aguardando ${lossWaitCount} dígitos perdedores para iniciar gale.`);
+        this.logger.log(`Derrota. Aguardando ${lossWaitCount} dígitos under 4 para iniciar gale.`);
       } else {
         // If martingale is already active or no lossWaitCount, just continue trading on next tick (no further waiting)
         state.martingaleActive = true; // Ensure martingale is active for subsequent ticks
@@ -124,4 +124,4 @@ class IAZeus {
   }
 }
 
-module.exports = IAZeus;
+module.exports = ZeusAI;

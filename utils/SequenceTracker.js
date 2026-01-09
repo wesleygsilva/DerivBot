@@ -1,6 +1,6 @@
 /**
  * Rastreador de Sequências
- * Monitora e analisa padrões de sequências de dígitos pares/ímpares
+ * Monitora e analisa padrões de sequências de dígitos
  */
 
 class SequenceTracker {
@@ -14,10 +14,10 @@ class SequenceTracker {
    */
   reset() {
     this.sequenceStats = {
-      Even: {}, // {2: 4, 3: 2, 4: 1} significa: 2 pares consecutivos aconteceu 4 vezes
-      Odd: {},
-      currentEvenSequence: 0,
-      currentOddSequence: 0,
+      Under4: {}, // {2: 4, 3: 2, 4: 1} significa: 2 dígitos under 4 consecutivos aconteceu 4 vezes
+      Over3: {},
+      currentUnder4Sequence: 0,
+      currentOver3Sequence: 0,
       totalDigits: 0,
       lastDigit: null
     };
@@ -31,29 +31,29 @@ class SequenceTracker {
    * Atualiza estatísticas com novo dígito
    */
   updateSequenceStats(digit) {
-    const isEven = digit % 2 === 0;
+    const isUnder4 = digit < 4;
     this.sequenceStats.totalDigits++;
     this.sequenceStats.lastDigit = digit;
     
-    if (isEven) {
-      // Se for par
-      this.sequenceStats.currentEvenSequence++;
+    if (isUnder4) {
+      // Se for under 4
+      this.sequenceStats.currentUnder4Sequence++;
       
-      // Se tinha sequência de ímpares, finaliza e conta
-      if (this.sequenceStats.currentOddSequence > 0) {
-        const count = this.sequenceStats.currentOddSequence;
-        this.sequenceStats.Odd[count] = (this.sequenceStats.Odd[count] || 0) + 1;
-        this.sequenceStats.currentOddSequence = 0;
+      // Se tinha sequência de over 3, finaliza e conta
+      if (this.sequenceStats.currentOver3Sequence > 0) {
+        const count = this.sequenceStats.currentOver3Sequence;
+        this.sequenceStats.Over3[count] = (this.sequenceStats.Over3[count] || 0) + 1;
+        this.sequenceStats.currentOver3Sequence = 0;
       }
     } else {
-      // Se for ímpar
-      this.sequenceStats.currentOddSequence++;
+      // Se for over 3
+      this.sequenceStats.currentOver3Sequence++;
       
-      // Se tinha sequência de pares, finaliza e conta
-      if (this.sequenceStats.currentEvenSequence > 0) {
-        const count = this.sequenceStats.currentEvenSequence;
-        this.sequenceStats.Even[count] = (this.sequenceStats.Even[count] || 0) + 1;
-        this.sequenceStats.currentEvenSequence = 0;
+      // Se tinha sequência de under 4, finaliza e conta
+      if (this.sequenceStats.currentUnder4Sequence > 0) {
+        const count = this.sequenceStats.currentUnder4Sequence;
+        this.sequenceStats.Under4[count] = (this.sequenceStats.Under4[count] || 0) + 1;
+        this.sequenceStats.currentUnder4Sequence = 0;
       }
     }
   }
@@ -66,44 +66,44 @@ class SequenceTracker {
     report += `Gerado em: ${new Date().toLocaleString('pt-BR')}\n`;
     report += `Total de dígitos analisados: ${this.sequenceStats.totalDigits}\n\n`;
     
-    report += "SEQUÊNCIAS DE DÍGITOS PARES:\n";
-    const EvenKeys = Object.keys(this.sequenceStats.Even).sort((a, b) => parseInt(a) - parseInt(b));
-    if (EvenKeys.length === 0) {
-      report += "Nenhuma sequência de pares registrada ainda.\n";
+    report += "SEQUÊNCIAS DE DÍGITOS UNDER 4:\n";
+    const Under4Keys = Object.keys(this.sequenceStats.Under4).sort((a, b) => parseInt(a) - parseInt(b));
+    if (Under4Keys.length === 0) {
+      report += "Nenhuma sequência de dígitos under 4 registrada ainda.\n";
     } else {
-      let totalEven = 0;
-      EvenKeys.forEach(length => {
-        const count = this.sequenceStats.Even[length];
-        totalEven += count;
+      let totalUnder4 = 0;
+      Under4Keys.forEach(length => {
+        const count = this.sequenceStats.Under4[length];
+        totalUnder4 += count;
         const percentage = this.sequenceStats.totalDigits > 0 ? ((count / this.sequenceStats.totalDigits) * 100).toFixed(2) : 0;
-        report += `${length} pares consecutivos: ${count} vezes (${percentage}%)\n`;
+        report += `${length} dígitos under 4 consecutivos: ${count} vezes (${percentage}%)\n`;
       });
-      report += `Total de sequências de pares: ${totalEven}\n`;
+      report += `Total de sequências de dígitos under 4: ${totalUnder4}\n`;
     }
     
-    report += "\nSEQUÊNCIAS DE DÍGITOS ÍMPARES:\n";
-    const OddKeys = Object.keys(this.sequenceStats.Odd).sort((a, b) => parseInt(a) - parseInt(b));
-    if (OddKeys.length === 0) {
-      report += "Nenhuma sequência de ímpares registrada ainda.\n";
+    report += "\nSEQUÊNCIAS DE DÍGITOS OVER 3:\n";
+    const Over3Keys = Object.keys(this.sequenceStats.Over3).sort((a, b) => parseInt(a) - parseInt(b));
+    if (Over3Keys.length === 0) {
+      report += "Nenhuma sequência de dígitos over 3 registrada ainda.\n";
     } else {
-      let totalOdd = 0;
-      OddKeys.forEach(length => {
-        const count = this.sequenceStats.Odd[length];
-        totalOdd += count;
+      let totalOver3 = 0;
+      Over3Keys.forEach(length => {
+        const count = this.sequenceStats.Over3[length];
+        totalOver3 += count;
         const percentage = this.sequenceStats.totalDigits > 0 ? ((count / this.sequenceStats.totalDigits) * 100).toFixed(2) : 0;
-        report += `${length} ímpares consecutivos: ${count} vezes (${percentage}%)\n`;
+        report += `${length} dígitos over 3 consecutivos: ${count} vezes (${percentage}%)\n`;
       });
-      report += `Total de sequências de ímpares: ${totalOdd}\n`;
+      report += `Total de sequências de dígitos over 3: ${totalOver3}\n`;
     }
     
     report += "\nSEQUÊNCIAS ATUAIS EM ANDAMENTO:\n";
-    if (this.sequenceStats.currentEvenSequence > 0) {
-      report += `Pares em andamento: ${this.sequenceStats.currentEvenSequence} consecutivos\n`;
+    if (this.sequenceStats.currentUnder4Sequence > 0) {
+      report += `Under 4 em andamento: ${this.sequenceStats.currentUnder4Sequence} consecutivos\n`;
     }
-    if (this.sequenceStats.currentOddSequence > 0) {
-      report += `Ímpares em andamento: ${this.sequenceStats.currentOddSequence} consecutivos\n`;
+    if (this.sequenceStats.currentOver3Sequence > 0) {
+      report += `Over 3 em andamento: ${this.sequenceStats.currentOver3Sequence} consecutivos\n`;
     }
-    if (this.sequenceStats.currentEvenSequence === 0 && this.sequenceStats.currentOddSequence === 0) {
+    if (this.sequenceStats.currentUnder4Sequence === 0 && this.sequenceStats.currentOver3Sequence === 0) {
       report += "Nenhuma sequência em andamento no momento.\n";
     }
     
@@ -120,44 +120,44 @@ class SequenceTracker {
     let analysis = "";
     
     // Sequência mais longa
-    const longestEven = Math.max(...Object.keys(this.sequenceStats.Even).map(Number), 0);
-    const longestOdd = Math.max(...Object.keys(this.sequenceStats.Odd).map(Number), 0);
+    const longestUnder4 = Math.max(...Object.keys(this.sequenceStats.Under4).map(Number), 0);
+    const longestOver3 = Math.max(...Object.keys(this.sequenceStats.Over3).map(Number), 0);
     
-    analysis += `Maior sequência de pares: ${longestEven}\n`;
-    analysis += `Maior sequência de ímpares: ${longestOdd}\n`;
+    analysis += `Maior sequência de dígitos under 4: ${longestUnder4}\n`;
+    analysis += `Maior sequência de dígitos over 3: ${longestOver3}\n`;
     
     // Sequência mais comum
-    let mostCommonEvenLength = 0;
-    let mostCommonEvenCount = 0;
-    Object.entries(this.sequenceStats.Even).forEach(([length, count]) => {
-      if (count > mostCommonEvenCount) {
-        mostCommonEvenCount = count;
-        mostCommonEvenLength = parseInt(length);
+    let mostCommonUnder4Length = 0;
+    let mostCommonUnder4Count = 0;
+    Object.entries(this.sequenceStats.Under4).forEach(([length, count]) => {
+      if (count > mostCommonUnder4Count) {
+        mostCommonUnder4Count = count;
+        mostCommonUnder4Length = parseInt(length);
       }
     });
     
-    let mostCommonOddLength = 0;
-    let mostCommonOddCount = 0;
-    Object.entries(this.sequenceStats.Odd).forEach(([length, count]) => {
-      if (count > mostCommonOddCount) {
-        mostCommonOddCount = count;
-        mostCommonOddLength = parseInt(length);
+    let mostCommonOver3Length = 0;
+    let mostCommonOver3Count = 0;
+    Object.entries(this.sequenceStats.Over3).forEach(([length, count]) => {
+      if (count > mostCommonOver3Count) {
+        mostCommonOver3Count = count;
+        mostCommonOver3Length = parseInt(length);
       }
     });
     
-    if (mostCommonEvenCount > 0) {
-      analysis += `Sequência de pares mais comum: ${mostCommonEvenLength} (${mostCommonEvenCount} vezes)\n`;
+    if (mostCommonUnder4Count > 0) {
+      analysis += `Sequência de under 4 mais comum: ${mostCommonUnder4Length} (${mostCommonUnder4Count} vezes)\n`;
     }
-    if (mostCommonOddCount > 0) {
-      analysis += `Sequência de ímpares mais comum: ${mostCommonOddLength} (${mostCommonOddCount} vezes)\n`;
+    if (mostCommonOver3Count > 0) {
+      analysis += `Sequência de over 3 mais comum: ${mostCommonOver3Length} (${mostCommonOver3Count} vezes)\n`;
     }
     
     // Média de sequências
-    const avgEvenLength = this.calculateAverageSequenceLength(this.sequenceStats.Even);
-    const avgOddLength = this.calculateAverageSequenceLength(this.sequenceStats.Odd);
+    const avgUnder4Length = this.calculateAverageSequenceLength(this.sequenceStats.Under4);
+    const avgOver3Length = this.calculateAverageSequenceLength(this.sequenceStats.Over3);
     
-    analysis += `Média de sequência de pares: ${avgEvenLength.toFixed(2)}\n`;
-    analysis += `Média de sequência de ímpares: ${avgOddLength.toFixed(2)}\n`;
+    analysis += `Média de sequência de under 4: ${avgUnder4Length.toFixed(2)}\n`;
+    analysis += `Média de sequência de over 3: ${avgOver3Length.toFixed(2)}\n`;
     
     return analysis;
   }
@@ -183,12 +183,12 @@ class SequenceTracker {
   getCurrentStats() {
     return {
       totalDigits: this.sequenceStats.totalDigits,
-      currentEvenSequence: this.sequenceStats.currentEvenSequence,
-      currentOddSequence: this.sequenceStats.currentOddSequence,
+      currentUnder4Sequence: this.sequenceStats.currentUnder4Sequence,
+      currentOver3Sequence: this.sequenceStats.currentOver3Sequence,
       lastDigit: this.sequenceStats.lastDigit,
       sequences: {
-        Even: { ...this.sequenceStats.Even },
-        Odd: { ...this.sequenceStats.Odd }
+        Under4: { ...this.sequenceStats.Under4 },
+        Over3: { ...this.sequenceStats.Over3 }
       }
     };
   }
@@ -197,7 +197,7 @@ class SequenceTracker {
    * Verifica se uma sequência específica já ocorreu
    */
   hasSequenceOccurred(type, length) {
-    const sequences = type === 'Even' ? this.sequenceStats.Even : this.sequenceStats.Odd;
+    const sequences = type === 'Under4' ? this.sequenceStats.Under4 : this.sequenceStats.Over3;
     return sequences[length] ? sequences[length] > 0 : false;
   }
 
@@ -205,7 +205,7 @@ class SequenceTracker {
    * Retorna quantas vezes uma sequência específica ocorreu
    */
   getSequenceCount(type, length) {
-    const sequences = type === 'Even' ? this.sequenceStats.Even : this.sequenceStats.Odd;
+    const sequences = type === 'Under4' ? this.sequenceStats.Under4 : this.sequenceStats.Over3;
     return sequences[length] || 0;
   }
 
@@ -213,8 +213,8 @@ class SequenceTracker {
    * Prediz próxima possível quebra de sequência
    */
   predictSequenceBreak() {
-    const currentEven = this.sequenceStats.currentEvenSequence;
-    const currentOdd = this.sequenceStats.currentOddSequence;
+    const currentUnder4 = this.sequenceStats.currentUnder4Sequence;
+    const currentOver3 = this.sequenceStats.currentOver3Sequence;
     
     let prediction = {
       type: null,
@@ -222,37 +222,37 @@ class SequenceTracker {
       reason: ""
     };
 
-    if (currentEven > 0) {
-      // Analisando sequência de pares atual
-      const historicalBreaks = Object.entries(this.sequenceStats.Even)
-        .filter(([length]) => parseInt(length) >= currentEven)
+    if (currentUnder4 > 0) {
+      // Analisando sequência de under 4 atual
+      const historicalBreaks = Object.entries(this.sequenceStats.Under4)
+        .filter(([length]) => parseInt(length) >= currentUnder4)
         .reduce((sum, [, count]) => sum + count, 0);
       
-      const totalEvenSequences = Object.values(this.sequenceStats.Even)
+      const totalUnder4Sequences = Object.values(this.sequenceStats.Under4)
         .reduce((sum, count) => sum + count, 0);
       
-      if (totalEvenSequences > 0) {
-        prediction.confidence = Math.min(95, (historicalBreaks / totalEvenSequences) * 100);
-        prediction.type = "Odd";
-        prediction.reason = `Sequência atual de ${currentEven} pares. Histórico sugere quebra.`;
+      if (totalUnder4Sequences > 0) {
+        prediction.confidence = Math.min(95, (historicalBreaks / totalUnder4Sequences) * 100);
+        prediction.type = "Over3";
+        prediction.reason = `Sequência atual de ${currentUnder4} dígitos under 4. Histórico sugere quebra.`;
       }
     }
 
-    if (currentOdd > 0) {
-      // Analisando sequência de ímpares atual
-      const historicalBreaks = Object.entries(this.sequenceStats.Odd)
-        .filter(([length]) => parseInt(length) >= currentOdd)
+    if (currentOver3 > 0) {
+      // Analisando sequência de over 3 atual
+      const historicalBreaks = Object.entries(this.sequenceStats.Over3)
+        .filter(([length]) => parseInt(length) >= currentOver3)
         .reduce((sum, [, count]) => sum + count, 0);
       
-      const totalOddSequences = Object.values(this.sequenceStats.Odd)
+      const totalOver3Sequences = Object.values(this.sequenceStats.Over3)
         .reduce((sum, count) => sum + count, 0);
       
-      if (totalOddSequences > 0) {
-        const confidence = Math.min(95, (historicalBreaks / totalOddSequences) * 100);
+      if (totalOver3Sequences > 0) {
+        const confidence = Math.min(95, (historicalBreaks / totalOver3Sequences) * 100);
         if (confidence > prediction.confidence) {
           prediction.confidence = confidence;
-          prediction.type = "Even";
-          prediction.reason = `Sequência atual de ${currentOdd} ímpares. Histórico sugere quebra.`;
+          prediction.type = "Under4";
+          prediction.reason = `Sequência atual de ${currentOver3} dígitos over 3. Histórico sugere quebra.`;
         }
       }
     }
@@ -268,19 +268,19 @@ class SequenceTracker {
       timestamp: new Date().toISOString(),
       totalDigits: this.sequenceStats.totalDigits,
       sequences: {
-        Even: { ...this.sequenceStats.Even },
-        Odd: { ...this.sequenceStats.Odd }
+        Under4: { ...this.sequenceStats.Under4 },
+        Over3: { ...this.sequenceStats.Over3 }
       },
       currentState: {
-        EvenSequence: this.sequenceStats.currentEvenSequence,
-        OddSequence: this.sequenceStats.currentOddSequence,
+        Under4Sequence: this.sequenceStats.currentUnder4Sequence,
+        Over3Sequence: this.sequenceStats.currentOver3Sequence,
         lastDigit: this.sequenceStats.lastDigit
       },
       analysis: {
-        avgEvenLength: this.calculateAverageSequenceLength(this.sequenceStats.Even),
-        avgOddLength: this.calculateAverageSequenceLength(this.sequenceStats.Odd),
-        longestEvenSequence: Math.max(...Object.keys(this.sequenceStats.Even).map(Number), 0),
-        longestOddSequence: Math.max(...Object.keys(this.sequenceStats.Odd).map(Number), 0)
+        avgUnder4Length: this.calculateAverageSequenceLength(this.sequenceStats.Under4),
+        avgOver3Length: this.calculateAverageSequenceLength(this.sequenceStats.Over3),
+        longestUnder4Sequence: Math.max(...Object.keys(this.sequenceStats.Under4).map(Number), 0),
+        longestOver3Sequence: Math.max(...Object.keys(this.sequenceStats.Over3).map(Number), 0)
       }
     };
   }
