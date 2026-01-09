@@ -373,3 +373,20 @@ body {
         justify-content: flex-start;
     }
 }
+
+.inline-fields-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px; /* Adjust as needed */
+    margin-top: 15px; /* Add some spacing from previous elements */
+}
+
+.inline-fields-group .form-group {
+    flex: 1; /* Allow items to grow and shrink */
+    min-width: 120px; /* Minimum width for each field */
+    margin-bottom: 0; /* Remove margin from individual form-groups inside the inline group */
+}
+
+.inline-fields-group .form-group label {
+    white-space: nowrap; /* Prevent labels from wrapping */
+}

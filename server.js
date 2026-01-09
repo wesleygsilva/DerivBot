@@ -23,7 +23,7 @@ app.use(express.static(__dirname + "/public"));
 // CONFIGURAÇÕES INICIAIS
 // =========================
 let config = {
-  strategy: "EvenOddStrategy",
+  strategy: "ParityAI",
   contract_type: "DIGITODD",
   duration: 1,
   symbol: "R_100",
@@ -33,7 +33,7 @@ let config = {
   payout: 0.95,
   minEven: 3,
   minOdd: 3,
-  profitGoal: 0,
+  profitGoal: 0, // Re-adding profit goal
   // OverUnder
   waitFor: 'UNDER',
   referenceDigit: 3,
@@ -254,16 +254,11 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", b
 
   // Para DIGITOVER/DIGITUNDER precisamos ajustar conforme o símbolo
   if (entryType.startsWith("DIGITOVER") || entryType.startsWith("DIGITUNDER")) {
-    const targetDigit = barrier || config.targetDigit;
-    
-    // Se o símbolo for 1HZ (1s), usamos barrier separado
-    if (config.symbol.startsWith("1HZ")) {
-      proposalData.contract_type = entryType.replace(/\d+$/, "");
-      proposalData.barrier = targetDigit;
-    } else {
-      // Para R_ (volatilities normais), o número vai junto no contract_type
-      proposalData.contract_type = entryType + targetDigit;
-    }
+    const targetDigit = barrier || config.targetDigit; // Ensure targetDigit is always passed
+
+    // Always send DIGITOVER/DIGITUNDER as contract_type and barrier as separate field
+    proposalData.contract_type = entryType.replace(/\d+$/, ""); // Remove any digit from contract_type
+    proposalData.barrier = targetDigit;
   }
 
   botState.makingEntry = true;
@@ -333,7 +328,8 @@ io.on("connection", (socket) => {
       socket.emit("currentStrategyInfo", {
         name: currentStrategy.name,
         description: getStrategyDescription(strategyName),
-        schema: currentStrategy.getConfigSchema()
+        schema: currentStrategy.getConfigSchema(),
+        tradingModes: typeof currentStrategy.getTradingModes === 'function' ? currentStrategy.getTradingModes() : {}
       });
       io.emit("configUpdate", config);
       io.emit("botStateUpdate", botState);
@@ -353,7 +349,8 @@ io.on("connection", (socket) => {
       socket.emit("currentStrategyInfo", {
         name: currentStrategy.name,
         description: getStrategyDescription(config.strategy),
-        schema: currentStrategy.getConfigSchema()
+        schema: currentStrategy.getConfigSchema(),
+        tradingModes: typeof currentStrategy.getTradingModes === 'function' ? currentStrategy.getTradingModes() : {}
       });
     }
   });
@@ -394,10 +391,11 @@ io.on("connection", (socket) => {
 // =========================
 function getStrategyDescription(strategyName) {
   const desc = {
-    EvenOddStrategy: "Aguarda sequências de dígitos pares/ímpares para fazer entrada no oposto",
-    OverUnderStrategy: "Aguarda sequências de dígitos OVER/UNDER um valor específico para fazer entrada"
+    ParityAI: "Aguarda sequências de dígitos pares/ímpares para fazer entrada no oposto",
+    OverUnderStrategy: "Aguarda sequências de dígitos OVER/UNDER um valor específico para fazer entrada",
+    IAZeus: "Entra sempre over 3. A espera para reentrar após uma perda é definida pelos modos de negociação."
   };
-  return desc[strategyName] || "Estratégia de trading automatizado";
+  return desc[strategyName] || "";
 }
 
 function handleAPIResponse(response) {

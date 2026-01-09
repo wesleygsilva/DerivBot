@@ -7,11 +7,11 @@
  * - Usa martingale em caso de loss
  */
 
-class EvenOddStrategy {
+class ParityAI {
   constructor(config, logger) {
     this.config = config;
     this.logger = logger;
-    this.name = "Par/Ímpar";
+    this.name = "IA Parity";
   }
 
   /**
@@ -185,30 +185,26 @@ class EvenOddStrategy {
         min: 1,
         max: 20,
         default: 3
+      }
+    };
+  }
+
+  getTradingModes() {
+    return {
+      "Veloz": {
+        minEven: 3,
+        minOdd: 3
       },
-      baseStake: {
-        type: 'number',
-        label: 'Stake Inicial',
-        min: 0.35,
-        step: 0.01,
-        default: 0.35
+      "Balanceado": {
+        minEven: 5,
+        minOdd: 5
       },
-      multiplier: {
-        type: 'number',
-        label: 'Multiplicador Martingale',
-        min: 1.1,
-        step: 0.1,
-        default: 2.2
-      },
-      maxMartingale: {
-        type: 'number',
-        label: 'Limite de Perda',
-        min: 1,
-        max: 15,
-        default: 6
+      "Preciso": {
+        minEven: 8,
+        minOdd: 8
       }
     };
   }
 }
 
-module.exports = EvenOddStrategy;
+module.exports = ParityAI;

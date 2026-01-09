@@ -297,27 +297,6 @@ class OverUnderStrategy {
       },
       
       // Configurações gerais
-      baseStake: { 
-        type: 'number', 
-        label: 'Stake Inicial', 
-        min: 0.35, 
-        step: 0.01, 
-        default: 0.35 
-      },
-      multiplier: { 
-        type: 'number', 
-        label: 'Multiplicador Martingale', 
-        min: 1.1, 
-        step: 0.1, 
-        default: 2.2 
-      },
-      maxMartingale: { 
-        type: 'number', 
-        label: 'Máx. Martingale', 
-        min: 1, 
-        max: 15, 
-        default: 6 
-      },
       payout: { 
         type: 'number', 
         label: 'Payout (%)', 
