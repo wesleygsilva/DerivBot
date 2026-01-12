@@ -8,6 +8,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@deriv/deriv-api": "^1.0.15",
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
     "ws": "^8.18.3"

@@ -1,28 +1,29 @@
-/**
- * Módulo para comunicação com a API da Deriv
- * Centraliza toda a lógica de WebSocket e comunicação
- */
-
 const WebSocket = require("ws");
+const DerivAPIBasic = require("@deriv/deriv-api/dist/DerivAPIBasic");
 
+/**
+ * Módulo para comunicação com a API da Deriv usando a biblioteca @deriv/deriv-api
+ */
 class DerivAPI {
   constructor(logger) {
     this.logger = logger;
     this.ws = null;
+    this.api = null; // Instância do @deriv/deriv-api
     this.apiToken = null;
     this.isConnected = false;
     this.reconnectAttempts = 0;
     this.maxReconnectAttempts = 5;
-    this.reconnectDelay = 5000; // 5 segundos
-    this.messageQueue = []; // Fila de mensagens para enviar quando conectar
+    this.reconnectDelay = 5000;
     this.responseCallback = null;
+    this.tickSubscription = null;
+    this.balanceSubscription = null;
   }
 
   /**
    * Conecta à API da Deriv
    */
   connect(token, responseCallback) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
       this.disconnect();
     }
 
@@ -34,27 +35,29 @@ class DerivAPI {
   }
 
   /**
-   * Estabelece conexão WebSocket
+   * Estabelece conexão WebSocket e inicializa o @deriv/deriv-api
    */
   establishConnection() {
     this.logger.log("Tentando conectar à Deriv API...");
-
     this.ws = new WebSocket("wss://ws.derivws.com/websockets/v3?app_id=1089");
+    this.api = new DerivAPIBasic({ connection: this.ws });
 
-    this.ws.on("open", () => {
+    this.ws.on("open", async () => {
       this.logger.logSuccess("Conexão WebSocket estabelecida");
-      this.reconnectAttempts = 0;
-      
-      // Autorizar automaticamente
-      this.sendMessage({ authorize: this.apiToken });
-    });
-
-    this.ws.on("message", (data) => {
       try {
-        const response = JSON.parse(data);
-        this.handleMessage(response);
-      } catch (error) {
-        this.logger.logError("Erro ao processar mensagem da API", error);
+        const authResponse = await this.api.authorize(this.apiToken);
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        
+        if (this.responseCallback) {
+          this.responseCallback(authResponse);
+        }
+      } catch (e) {
+        const errorMsg = e.error ? e.error.message : e.message;
+        this.logger.logError(`Erro de autorização: ${errorMsg}`, "error");
+        if (this.responseCallback) {
+          this.responseCallback({ error: { message: errorMsg } });
+        }
       }
     });
 
@@ -63,15 +66,20 @@ class DerivAPI {
       this.isConnected = false;
     });
 
-    this.ws.on("close", (code, reason) => {
+    this.ws.on("close", () => {
       this.isConnected = false;
-      this.logger.logWarning(`Conexão fechada - Código: ${code}, Razão: ${reason}`);
+      this.logger.logWarning("Conexão fechada.");
       
-      // Tentar reconectar automaticamente
+      // Limpa subscrições
+      if (this.tickSubscription) this.tickSubscription.unsubscribe();
+      if (this.balanceSubscription) this.balanceSubscription.unsubscribe();
+      this.tickSubscription = null;
+      this.balanceSubscription = null;
+      
       if (this.reconnectAttempts < this.maxReconnectAttempts && this.apiToken) {
         this.scheduleReconnect();
-      } else {
-        this.logger.logError("Máximo de tentativas de reconexão atingido");
+      } else if (this.apiToken) {
+        this.logger.logError("Máximo de tentativas de reconexão atingido.");
       }
     });
   }
@@ -88,101 +96,64 @@ class DerivAPI {
         this.establishConnection();
       }
     }, this.reconnectDelay);
-
-    // Aumenta o delay para próximas tentativas
-    this.reconnectDelay = Math.min(this.reconnectDelay * 1.5, 30000); // Máximo 30s
   }
 
   /**
-   * Processa mensagens recebidas da API
+   * Roteia mensagens para os métodos corretos do @deriv/deriv-api
    */
-  handleMessage(response) {
-    // Log de debugging (pode ser removido em produção)
-    if (response.error) {
-      this.logger.logError(`Erro da API: ${response.error.message}`);
-    }
-
-    // Processar autorização
-    if (response.authorize) {
-      this.isConnected = true;
-      this.logger.logSuccess("Autorização bem-sucedida na Deriv API");
-      
-      // Processar fila de mensagens pendentes
-      this.processMessageQueue();
-    }
-
-    // Repassar resposta para o callback principal
-    if (this.responseCallback) {
-      this.responseCallback(response);
-    }
-  }
-
-  /**
-   * Envia mensagem para a API
-   */
-  sendMessage(message) {
-    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      // Adicionar à fila se não estiver conectado
-      this.messageQueue.push(message);
-      this.logger.logWarning("Mensagem adicionada à fila (não conectado)");
-      return false;
+  async sendMessage(message) {
+    if (!this.api || !this.isConnected) {
+      this.logger.logWarning("API não conectada. A chamada foi ignorada.", "warn");
+      return;
     }
 
     try {
-      const messageStr = JSON.stringify(message);
-      this.ws.send(messageStr);
-      
-      // Log apenas para mensagens importantes
-      if (message.proposal || message.buy || message.balance || message.ticks) {
-        // this.logger.log(`Mensagem enviada: ${this.getMessageType(message)}`);
+      if (message.proposal) {
+        const proposalResponse = await this.api.proposal(message);
+        this.responseCallback(proposalResponse);
+      } else if (message.buy) {
+        const buyResponse = await this.api.buy(message);
+        this.responseCallback(buyResponse);
+      } else if (message.balance) {
+        if (this.balanceSubscription) this.balanceSubscription.unsubscribe();
+        this.balanceSubscription = this.api.subscribe(message).subscribe(response => {
+          this.responseCallback(response);
+        });
+      } else if (message.ticks) {
+        if (this.tickSubscription) this.tickSubscription.unsubscribe();
+        this.tickSubscription = this.api.subscribe(message).subscribe(response => {
+          this.responseCallback(response);
+        });
+      } else if (message.forget_all === 'ticks') {
+        if (this.tickSubscription) {
+          this.tickSubscription.unsubscribe();
+          this.tickSubscription = null;
+          this.logger.log("Subscrição de ticks cancelada.", "info");
+        }
+      } else {
+        this.logger.log(`Tipo de mensagem não tratada: ${Object.keys(message)[0]}`, 'warn');
       }
-      
-      return true;
-    } catch (error) {
-      this.logger.logError("Erro ao enviar mensagem", error);
-      return false;
-    }
-  }
-
-  /**
-   * Processa fila de mensagens pendentes
-   */
-  processMessageQueue() {
-    if (this.messageQueue.length > 0) {
-      this.logger.log(`Processando ${this.messageQueue.length} mensagens da fila`);
-      
-      while (this.messageQueue.length > 0) {
-        const message = this.messageQueue.shift();
-        this.sendMessage(message);
+    } catch (e) {
+      const errorMsg = e.error ? e.error.message : e.message;
+      this.logger.logError(`Erro na chamada da API: ${errorMsg}`, "error");
+      if (this.responseCallback) {
+        this.responseCallback({ error: { message: errorMsg } });
       }
     }
-  }
-
-  /**
-   * Retorna tipo da mensagem para logs
-   */
-  getMessageType(message) {
-    if (message.authorize) return "AUTHORIZE";
-    if (message.proposal) return "PROPOSAL";
-    if (message.buy) return "BUY";
-    if (message.balance) return "BALANCE";
-    if (message.ticks) return "TICKS_SUBSCRIPTION";
-    return "OTHER";
   }
 
   /**
    * Desconecta da API
    */
   disconnect() {
-    if (this.ws) {
-      this.ws.removeAllListeners();
-      this.ws.close();
-      this.ws = null;
-    }
+    if (this.tickSubscription) this.tickSubscription.unsubscribe();
+    if (this.balanceSubscription) this.balanceSubscription.unsubscribe();
+    if (this.api) this.api.disconnect();
     
+    this.ws = null;
+    this.api = null;
     this.isConnected = false;
-    this.apiToken = null;
-    this.messageQueue = [];
+    this.apiToken = null; // Previne reconexão automática ao desconectar manualmente
     this.logger.log("Desconectado da Deriv API");
   }
 
@@ -190,140 +161,7 @@ class DerivAPI {
    * Verifica se está conectado
    */
   isConnectedToAPI() {
-    return this.isConnected && this.ws && this.ws.readyState === WebSocket.OPEN;
-  }
-
-  /**
-   * Retorna estatísticas da conexão
-   */
-  getConnectionStats() {
-    return {
-      isConnected: this.isConnected,
-      reconnectAttempts: this.reconnectAttempts,
-      queuedMessages: this.messageQueue.length,
-      wsState: this.ws ? this.ws.readyState : null,
-      wsStateText: this.getWebSocketStateText()
-    };
-  }
-
-  /**
-   * Retorna texto descritivo do estado do WebSocket
-   */
-  getWebSocketStateText() {
-    if (!this.ws) return "Não conectado";
-    
-    switch (this.ws.readyState) {
-      case WebSocket.CONNECTING: return "Conectando";
-      case WebSocket.OPEN: return "Conectado";
-      case WebSocket.CLOSING: return "Fechando";
-      case WebSocket.CLOSED: return "Fechado";
-      default: return "Desconhecido";
-    }
-  }
-
-  /**
-   * Força reconexão imediata
-   */
-  forceReconnect() {
-    this.logger.log("Forçando reconexão...");
-    this.disconnect();
-    
-    if (this.apiToken) {
-      setTimeout(() => {
-        this.establishConnection();
-      }, 1000);
-    }
-  }
-
-  /**
-   * Envia ping para manter conexão viva
-   */
-  ping() {
-    if (this.isConnectedToAPI()) {
-      this.sendMessage({ ping: 1 });
-    }
-  }
-
-  /**
-   * Inicia ping automático para manter conexão
-   */
-  startKeepAlive(interval = 30000) { // 30 segundos
-    this.keepAliveInterval = setInterval(() => {
-      this.ping();
-    }, interval);
-    
-    this.logger.log(`Keep-alive iniciado (${interval/1000}s)`);
-  }
-
-  /**
-   * Para ping automático
-   */
-  stopKeepAlive() {
-    if (this.keepAliveInterval) {
-      clearInterval(this.keepAliveInterval);
-      this.keepAliveInterval = null;
-      this.logger.log("Keep-alive parado");
-    }
-  }
-
-  /**
-   * Subscreve para receber ticks de um símbolo
-   */
-  subscribeTicks(symbol) {
-    return this.sendMessage({ ticks: symbol, subscribe: 1 });
-  }
-
-  /**
-   * Cancela subscrição de ticks
-   */
-  unsubscribeTicks(subscriptionId) {
-    return this.sendMessage({ forget: subscriptionId });
-  }
-
-  /**
-   * Subscreve para receber balance
-   */
-  subscribeBalance() {
-    return this.sendMessage({ balance: 1, subscribe: 1 });
-  }
-
-  /**
-   * Cria proposta de trade
-   */
-  createProposal(params) {
-    const proposalRequest = {
-      proposal: 1,
-      amount: params.amount,
-      basis: params.basis || "stake",
-      contract_type: params.contract_type,
-      currency: params.currency || "USD",
-      duration: params.duration,
-      duration_unit: params.duration_unit || "t",
-      symbol: params.symbol
-    };
-
-    return this.sendMessage(proposalRequest);
-  }
-
-  /**
-   * Compra um contrato
-   */
-  buyContract(proposalId, price) {
-    return this.sendMessage({
-      buy: proposalId,
-      price: price
-    });
-  }
-
-  /**
-   * Obtém histórico de ticks
-   */
-  getTickHistory(symbol, count = 1000) {
-    return this.sendMessage({
-      ticks_history: symbol,
-      count: count,
-      end: "latest"
-    });
+    return this.isConnected && this.api && this.ws && this.ws.readyState === WebSocket.OPEN;
   }
 }
 
