@@ -50,6 +50,7 @@ class ZeusAI {
             shouldTrade: true,
             entryType: "DIGITOVER",
             barrier: 3,
+            payout: 0.56, // Payout para esta entrada
             reason: "ZeusAI: Entrada Over 3 (após aguardar sequência de dígitos under 4)"
           };
         }
@@ -65,6 +66,7 @@ class ZeusAI {
       shouldTrade: true,
       entryType: "DIGITOVER",
       barrier: 3,
+      payout: 0.56, // Payout para esta entrada
       reason: "ZeusAI: Entrada Over 3"
     };
   }
@@ -105,10 +107,6 @@ class ZeusAI {
 
   getCurrentStake(state) {
     return parseFloat(state.currentStake.toFixed(2));
-  }
-
-  getPayout() {
-    return 0.56; // 56% payout for Over 3
   }
 
   validateTradeResult(trade) {

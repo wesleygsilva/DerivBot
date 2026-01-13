@@ -163,7 +163,7 @@ function handleTick(tick) {
       const decision = currentStrategy.processSignal(lastDigit, botState.strategyState);
 
       if (decision.shouldTrade) {
-        makeEntryAsync(lastDigit, decision.entryType, decision.reason, decision.barrier);
+        makeEntryAsync(lastDigit, decision);
       }
     }
   }
@@ -192,8 +192,8 @@ function resolveOpenTrades(tick) {
       }
       
       const stake = trade.stake;
-      const strategyPayout = currentStrategy.getPayout();
-      const profit = isWin ? (stake * strategyPayout) : -stake;
+      const tradePayout = trade.payout; // Usa o payout armazenado no trade
+      const profit = isWin ? (stake * tradePayout) : -stake;
       
       botState.stats.totalTrades++;
       botState.stats.profit = parseFloat((botState.stats.profit + profit).toFixed(2));
@@ -223,12 +223,14 @@ function resolveOpenTrades(tick) {
 // =========================
 // FAZER ENTRADA
 // =========================
-function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", barrier = null) {
+function makeEntryAsync(lastDigit = null, decision) {
   if (!botState.connected || !botState.isRunning || botState.makingEntry) {
     return;
   }
 
   botState.makingEntry = true;
+
+  const { entryType, reason, barrier, payout } = decision;
 
   const rawStake = currentStrategy ? currentStrategy.getCurrentStake(botState.strategyState) : config.baseStake;
   const stake = parseFloat(Number(rawStake).toFixed(2));
@@ -271,6 +273,7 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", b
     reason: reason,
     contract_id: null,
     expiry_time: 0,
+    payout: payout, // Armazena o payout da decisão da estratégia
   };
 
   try {
@@ -395,7 +398,7 @@ io.on("connection", (socket) => {
 function getStrategyDescription(strategyName) {
   const desc = {
     ParityAI: "Aguarda sequências de dígitos pares/ímpares para fazer entrada no oposto",
-    OverUnderStrategy: "Aguarda sequências de dígitos OVER/UNDER um valor específico para fazer entrada",
+    GladiatorAI: "Estratégia Gladiator AI, aguarda sequências de dígitos OVER/UNDER para fazer entrada",
     ZeusAI: "Entra sempre over 3. A espera para reentrar após uma perda é definida pelos modos de negociação."
   };
   return desc[strategyName] || "";
