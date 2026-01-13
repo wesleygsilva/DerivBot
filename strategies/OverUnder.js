@@ -206,6 +206,10 @@ class OverUnderStrategy {
     return parseFloat(state.currentStake.toFixed(2));
   }
 
+  getPayout() {
+    return this.config.payout || 0.95;
+  }
+
   /**
    * Valida se o resultado do trade foi WIN ou LOSS
    * @param {object} trade - Objeto do trade com { entryType, barrier, resultDigit }

@@ -107,6 +107,10 @@ class ZeusAI {
     return parseFloat(state.currentStake.toFixed(2));
   }
 
+  getPayout() {
+    return 0.56; // 56% payout for Over 3
+  }
+
   validateTradeResult(trade) {
     return trade.resultDigit > 3;
   }

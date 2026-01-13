@@ -35,10 +35,9 @@ let config = {
   baseStake: 0.35,
   multiplier: 2.2,
   maxMartingale: 6,
-  payout: 0.95,
   minEven: 3,
   minOdd: 3,
-  profitGoal: 0, // Re-adding profit goal
+  profitGoal: 0,
   // OverUnder
   waitFor: 'UNDER',
   referenceDigit: 3,
@@ -104,6 +103,11 @@ logger.log("Tentando auto-conectar à Deriv API...");
 // =========================
 // UTILS
 // =========================
+function getTickDurationInSeconds(symbol) {
+  // Symbols com '1HZ' têm ticks de 1 segundo, os outros padrões (R_XX) são de 2 segundos.
+  return symbol.includes('1HZ') ? 1 : 2;
+}
+
 function ensureValidNumber(value, defaultValue = 1.0) {
   const num = parseFloat(value);
   return isNaN(num) || num <= 0 ? defaultValue : num;
@@ -128,13 +132,11 @@ function subscribeToTicks(symbol) {
     return;
   }
 
-  // Se já houver uma subscrição ativa para um símbolo diferente, cancelar
   if (currentTickSubscription && currentTickSubscription !== symbol) {
     logger.log(`Cancelando subscrição anterior: ${currentTickSubscription}`, "info");
     derivAPI.sendMessage({ forget_all: "ticks" });
   }
 
-  // Subscrever ao novo símbolo
   logger.log(`Subscrevendo aos ticks: ${symbol}`, "info");
   derivAPI.sendMessage({ ticks: symbol, subscribe: 1 });
   currentTickSubscription = symbol;
@@ -151,9 +153,12 @@ function handleTick(tick) {
   if (botState.lastDigits.length > 20) botState.lastDigits.shift();
 
   sequenceTracker.updateSequenceStats(lastDigit);
+  
   resolveOpenTrades(tick);
   
-  if (botState.isRunning) {
+  const hasOpenTrade = Object.values(localTrades).some(t => t.status === 'sent' || t.status === 'open');
+
+  if (botState.isRunning && !hasOpenTrade) {
     if (currentStrategy) {
       const decision = currentStrategy.processSignal(lastDigit, botState.strategyState);
 
@@ -163,20 +168,18 @@ function handleTick(tick) {
     }
   }
 
-  // Sempre enviar o estado mais recente para o cliente
   io.emit("botStateUpdate", botState);
 }
 
 function resolveOpenTrades(tick) {
   const lastDigit = parseInt(Number(tick.quote).toFixed(2).replace('.', '').slice(-1));
-  const tradeIds = Object.keys(localTrades);
 
-  for (const id of tradeIds) {
+  for (const id of Object.keys(localTrades)) {
     const trade = localTrades[id];
     
-    // Usar o tempo de expiração para resolver o trade
-    if (trade && trade.status === "open" && tick.epoch > trade.expiry_time) {
+    if (trade && trade.status === "open" && tick.epoch >= trade.expiry_time) {
       trade.resultDigit = lastDigit;
+      trade.status = 'closed';
       
       let isWin = false;
       if (currentStrategy && typeof currentStrategy.validateTradeResult === 'function') {
@@ -187,17 +190,22 @@ function resolveOpenTrades(tick) {
         else if (trade.entryType === "DIGITOVER") isWin = lastDigit > trade.barrier;
         else if (trade.entryType === "DIGITUNDER") isWin = lastDigit < trade.barrier;
       }
-
-      trade.status = isWin ? "win" : "loss";
-
+      
+      const stake = trade.stake;
+      const strategyPayout = currentStrategy.getPayout();
+      const profit = isWin ? (stake * strategyPayout) : -stake;
+      
       botState.stats.totalTrades++;
+      botState.stats.profit = parseFloat((botState.stats.profit + profit).toFixed(2));
+      botState.balance = parseFloat((botState.balance + profit).toFixed(2));
+
       if (isWin) {
         botState.stats.wins++;
-        logger.log(`Trade #${trade.id} (${trade.contract_id}) WIN | Entrada: ${trade.entryDigit} → Saída: ${trade.resultDigit}`);
+        logger.log(`Trade #${trade.id} WIN | Saída: ${trade.resultDigit} | Lucro: ${profit.toFixed(2)}`);
         if (currentStrategy) currentStrategy.onTradeResult(trade, botState.strategyState, true);
       } else {
         botState.stats.losses++;
-        logger.log(`Trade #${trade.id} (${trade.contract_id}) LOSS | Entrada: ${trade.entryDigit} → Saída: ${trade.resultDigit}`, "error");
+        logger.log(`Trade #${trade.id} LOSS | Saída: ${trade.resultDigit} | Prejuízo: ${profit.toFixed(2)}`, "error");
         if (currentStrategy) {
           const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false);
           if (!shouldContinue) botState.isRunning = false;
@@ -205,6 +213,7 @@ function resolveOpenTrades(tick) {
       }
 
       io.emit("tradeResult", trade);
+      delete localTrades[id];
       
       if (checkProfitGoal()) return;
     }
@@ -215,10 +224,11 @@ function resolveOpenTrades(tick) {
 // FAZER ENTRADA
 // =========================
 function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", barrier = null) {
-  if (!botState.connected || !botState.isRunning) {
-    botState.makingEntry = false;
+  if (!botState.connected || !botState.isRunning || botState.makingEntry) {
     return;
   }
+
+  botState.makingEntry = true;
 
   const rawStake = currentStrategy ? currentStrategy.getCurrentStake(botState.strategyState) : config.baseStake;
   const stake = parseFloat(Number(rawStake).toFixed(2));
@@ -227,24 +237,10 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", b
     botState.isRunning = false;
     botState.makingEntry = false;
     logger.log("Saldo insuficiente. Bot parado.", "error");
+    io.emit("botStateUpdate", botState);
     return;
   }
 
-  const id = ++tradeCounter;
-  localTrades[id] = {
-    id,
-    stake: stake,
-    entryDigit: lastDigit,
-    entryType,
-    barrier: barrier || config.targetDigit,
-    status: "open",
-    timestamp: Date.now(),
-    reason: reason,
-    contract_id: null,
-    expiry_time: 0
-  };
-
-  // Construir proposta para Deriv
   const proposalData = {
     proposal: 1,
     amount: stake,
@@ -253,28 +249,40 @@ function makeEntryAsync(lastDigit = null, entryType = "DIGITODD", reason = "", b
     currency: "USD",
     duration: config.duration,
     duration_unit: "t",
-    symbol: config.symbol
+    symbol: config.symbol,
   };
 
-  // Para DIGITOVER/DIGITUNDER precisamos ajustar conforme o símbolo
   if (entryType.startsWith("DIGITOVER") || entryType.startsWith("DIGITUNDER")) {
-    const targetDigit = barrier || config.targetDigit; // Ensure targetDigit is always passed
-
-    // Always send DIGITOVER/DIGITUNDER as contract_type and barrier as separate field
-    proposalData.contract_type = entryType.replace(/\d+$/, ""); // Remove any digit from contract_type
+    const targetDigit = barrier || config.targetDigit;
+    proposalData.contract_type = entryType.replace(/\d+$/, "");
     proposalData.barrier = targetDigit;
   }
+  
+  const id = ++tradeCounter;
 
-  botState.makingEntry = true;
+  localTrades[id] = {
+    id,
+    stake: stake,
+    entryDigit: lastDigit,
+    entryType: proposalData.contract_type,
+    barrier: proposalData.barrier,
+    status: "sent",
+    timestamp: Date.now(),
+    reason: reason,
+    contract_id: null,
+    expiry_time: 0,
+  };
+
   try {
     derivAPI.sendMessage(proposalData);
   } catch (error) {
     botState.makingEntry = false;
     logger.log("Erro ao enviar proposta", "error");
+    delete localTrades[id];
   }
 
   io.emit("tradePending", localTrades[id]);
-  logger.log(`Trade #${id} lançado | ${reason} | Entrada ${proposalData.contract_type} após dígito: ${lastDigit} | Stake: ${stake}`);
+  logger.log(`Trade #${id} lançado | ${reason} | Stake: ${stake}`);
 }
 
 // =========================
@@ -311,12 +319,9 @@ io.on("connection", (socket) => {
     const oldSymbol = config.symbol;
     updateConfig(newConfig);
     
-    // Se o símbolo mudou e estamos conectados, re-subscrever
     if (newConfig.symbol && newConfig.symbol !== oldSymbol && botState.connected) {
       logger.log(`Símbolo alterado: ${oldSymbol} → ${config.symbol}`, "info");
       subscribeToTicks(config.symbol);
-      
-      // Limpar dígitos ao trocar de símbolo
       botState.lastDigits = [];
       io.emit("botStateUpdate", botState);
     }
@@ -360,17 +365,12 @@ io.on("connection", (socket) => {
   });
 
   socket.on("reset_stats", resetStats);
-
   socket.on("clear_digits", () => {
     botState.lastDigits = [];
     logger.log("Dígitos limpos");
     io.emit("botStateUpdate", botState);
   });
-
-  socket.on("get_config", () => {
-    socket.emit("configUpdate", config);
-  });
-
+  socket.on("get_config", () => { socket.emit("configUpdate", config); });
   socket.on("download_full_log", () => {
     const report = logger.generateFullLogReport();
     socket.emit("downloadFile", {
@@ -379,7 +379,6 @@ io.on("connection", (socket) => {
       type: "text/plain"
     });
   });
-
   socket.on("download_sequence_report", () => {
     const report = sequenceTracker.generateSequenceReport();
     socket.emit("downloadFile", {
@@ -420,28 +419,34 @@ function handleAPIResponse(response) {
   if (response.balance) {
     botState.balance = ensureValidNumber(response.balance.balance, 0);
     if (botState.initialBalance === 0) botState.initialBalance = botState.balance;
-    botState.stats.profit = parseFloat((botState.balance - botState.initialBalance).toFixed(2));
     io.emit("botStateUpdate", botState);
   }
 
   if (response.proposal) {
-    derivAPI.sendMessage({ buy: response.proposal.id, price: response.proposal.ask_price });
+    const trade = Object.values(localTrades).find(t => t.status === 'sent');
+    if (trade) {
+      derivAPI.sendMessage({ buy: response.proposal.id, price: response.proposal.ask_price });
+    } else {
+      logger.log("Proposta recebida sem um trade local correspondente.", "warning");
+    }
   }
 
   if (response.buy) {
-    botState.makingEntry = false;
+    const contractId = response.buy.contract_id;
+    const trade = Object.values(localTrades).find(t => t.status === 'sent' && !t.contract_id);
     
-    const openTrades = Object.values(localTrades).filter(t => t.status === "open" && !t.contract_id);
-    if (openTrades.length > 0) {
-      const lastTrade = openTrades[openTrades.length - 1];
-      lastTrade.contract_id = response.buy.contract_id;
-      lastTrade.purchase_time = response.buy.purchase_time;
+    if (trade) {
+      trade.contract_id = contractId;
+      trade.status = 'open';
       
-      // O tick para R_100 é de 2 segundos. 
-      lastTrade.expiry_time = response.buy.purchase_time + 2; 
-
-      logger.log(`Contract ID: ${lastTrade.contract_id} vinculado ao Trade #${lastTrade.id}`);
+      const tickDurationInSeconds = getTickDurationInSeconds(config.symbol);
+      trade.expiry_time = response.buy.purchase_time + (config.duration * tickDurationInSeconds);
+      logger.log(`Contract ID: ${contractId} vinculado ao Trade #${trade.id}. Apuração estimada no tempo: ${trade.expiry_time}`);
+    } else {
+      logger.log(`Compra recebida para contract_id ${contractId} mas não foi encontrado trade local.`, "warning");
     }
+    
+    botState.makingEntry = false;
   }
 
   if (response.tick) {

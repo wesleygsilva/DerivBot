@@ -154,6 +154,13 @@ class ParityAI {
   }
 
   /**
+   * Retorna o payout da estratégia
+   */
+  getPayout() {
+    return 0.95; // Standard payout for DIGITODD/EVEN
+  }
+
+  /**
    * Retorna informações sobre o estado atual da estratégia
    */
   getStatusInfo(state) {
