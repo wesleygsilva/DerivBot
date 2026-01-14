@@ -141,6 +141,14 @@ class GladiatorAI {
       "Preciso": { lossWaitCount: 7 }
     };
   }
+
+  getRiskModes() {
+    return {
+      "Conservador": 2.2,
+      "Otimizado": 2.4,
+      "Agressivo": 2.6,
+    };
+  }
 }
 
 module.exports = GladiatorAI;

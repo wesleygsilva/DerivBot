@@ -207,6 +207,14 @@ class ParityAI {
       }
     };
   }
+
+  getRiskModes() {
+    return {
+      "Conservador": 2.1,
+      "Otimizado": 2.3,
+      "Agressivo": 2.5,
+    };
+  }
 }
 
 module.exports = ParityAI;

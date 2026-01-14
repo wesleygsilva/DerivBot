@@ -29,11 +29,12 @@ const AUTO_CONNECT_TOKEN = "NSZPzUBXPi37dnV"; // Token provisório
 // =========================
 let config = {
   strategy: "ParityAI",
+  riskMode: "Conservador", // Um modo de risco padrão
   contract_type: "DIGITODD",
   duration: 1,
   symbol: "R_100",
   baseStake: 0.35,
-  multiplier: 2.2,
+  multiplier: 2.2, // O multiplicador será definido pelo riskMode da estratégia
   maxMartingale: 6,
   minEven: 3,
   minOdd: 3,
@@ -334,15 +335,28 @@ io.on("connection", (socket) => {
     if (strategies[strategyName]) {
       config.strategy = strategyName;
       currentStrategy = strategies[strategyName];
+      
+      // Atualiza os modos de risco e o multiplicador padrão para a nova estratégia
+      let riskModes = {};
+      if (typeof currentStrategy.getRiskModes === 'function') {
+        riskModes = currentStrategy.getRiskModes();
+        const defaultRiskMode = Object.keys(riskModes)[0] || "Conservador";
+        config.riskMode = defaultRiskMode;
+        config.multiplier = riskModes[defaultRiskMode] || 2.2;
+      }
+      socket.emit("riskModesUpdate", riskModes);
+      
       currentStrategy.updateConfig(config);
       botState.strategyState = currentStrategy.reset();
       logger.log(`Estratégia alterada para: ${currentStrategy.name}`);
+      
       socket.emit("currentStrategyInfo", {
         name: currentStrategy.name,
         description: getStrategyDescription(strategyName),
         schema: currentStrategy.getConfigSchema(),
         tradingModes: typeof currentStrategy.getTradingModes === 'function' ? currentStrategy.getTradingModes() : {}
       });
+
       io.emit("configUpdate", config);
       io.emit("botStateUpdate", botState);
     }
@@ -357,6 +371,14 @@ io.on("connection", (socket) => {
       };
     });
     socket.emit("strategiesUpdate", info);
+
+    // Envia os modos de risco da estratégia atual
+    let riskModes = {};
+    if (currentStrategy && typeof currentStrategy.getRiskModes === 'function') {
+        riskModes = currentStrategy.getRiskModes();
+    }
+    socket.emit("riskModesUpdate", riskModes);
+
     if (currentStrategy) {
       socket.emit("currentStrategyInfo", {
         name: currentStrategy.name,
@@ -458,8 +480,20 @@ function handleAPIResponse(response) {
 }
 
 function updateConfig(newConfig) {
+  // Primeiro, mescla a configuração recebida para atualizar o riskMode, se houver.
   Object.assign(config, newConfig);
+
+  // Agora, com base no riskMode (potencialmente novo), define o multiplicador correto.
+  // Isso garante que o multiplicador do modo de risco tenha prioridade.
+  if (config.riskMode && currentStrategy && typeof currentStrategy.getRiskModes === 'function') {
+    const riskModes = currentStrategy.getRiskModes();
+    if (riskModes[config.riskMode]) {
+      config.multiplier = riskModes[config.riskMode];
+    }
+  }
+
   if (currentStrategy) currentStrategy.updateConfig(config);
+  
   logger.log("Configurações atualizadas");
   io.emit("botStateUpdate", botState);
   io.emit("configUpdate", config);

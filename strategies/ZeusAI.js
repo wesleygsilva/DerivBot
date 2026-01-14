@@ -124,6 +124,14 @@ class ZeusAI {
       "Preciso": { lossWaitCount: 5 }
     };
   }
+
+  getRiskModes() {
+    return {
+      "Conservador": 2.8,
+      "Otimizado": 3.0,
+      "Agressivo": 3.2,
+    };
+  }
 }
 
 module.exports = ZeusAI;
