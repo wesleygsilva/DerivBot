@@ -37,12 +37,12 @@ class GladiatorAI {
           shouldTrade: true,
           entryType: "DIGITOVER",
           barrier: 2,
-          payout: 0.19, // Payout para entrada normal
+          payout: 0.35, // Payout para entrada normal
           reason: "Gladiator AI: Entrada Padrão Over 2"
         };
       
       case 'WAITING_FOR_GALE_SEQUENCE':
-        const requiredSequence = this.config.lossWaitCount || 3; // Padrão 3 (Veloz)
+        const requiredSequence = this.config.lossWaitCount || 2; // Padrão 3 (Veloz)
         
         if (digit < 5) {
           state.sequenceCounter++;
@@ -107,7 +107,7 @@ class GladiatorAI {
       
       if (state.currentState === 'NORMAL') {
         // Se a primeira perda acontece, muda para o estado de espera.
-        const requiredSequence = this.config.lossWaitCount || 3;
+        const requiredSequence = this.config.lossWaitCount || 2;
         state.currentState = 'WAITING_FOR_GALE_SEQUENCE';
         state.sequenceCounter = 0;
         this.logger.log(`Derrota. Gale ${state.martingaleCount} ativado. Aguardando ${requiredSequence} dígitos Under 5 para entrar Over 4.`);
@@ -136,9 +136,9 @@ class GladiatorAI {
   // Define os modos de negociação que controlam a espera do gale.
   getTradingModes() {
     return {
-      "Veloz": { lossWaitCount: 3 },
-      "Balanceado": { lossWaitCount: 5 },
-      "Preciso": { lossWaitCount: 7 }
+      "Veloz": { lossWaitCount: 2 },
+      "Balanceado": { lossWaitCount: 4 },
+      "Preciso": { lossWaitCount: 6 }
     };
   }
 
