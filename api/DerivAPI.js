@@ -114,15 +114,15 @@ class DerivAPI {
     }
     try {
       const response = await this.api.activeSymbols({ active_symbols: 'brief' });
-      // Remover logs temporários de depuração
-      // this.logger.log("Active Symbols Response:", JSON.stringify(response.active_symbols, null, 2), "debug");
+      // Temporary log for debugging:
+      this.logger.log("Active Symbols Response (full list):", JSON.stringify(response.active_symbols, null, 2), "debug");
 
       const symbolDetails = response.active_symbols.find(s => s.symbol === symbol);
 
-      // Remover logs temporários de depuração
-      // if (symbolDetails) {
-      //    this.logger.log(`Found symbol details for ${symbol}: ${JSON.stringify(symbolDetails, null, 2)}`, "debug");
-      // }
+      // Log symbolDetails if found, for debugging
+      if (symbolDetails) {
+         this.logger.log(`Found symbol details for ${symbol}: ${JSON.stringify(symbolDetails, null, 2)}`, "debug");
+      }
 
       if (symbolDetails && symbolDetails.pip !== undefined) { // Verifica a propriedade 'pip'
         let decimalPlaces = 2; // Padrão
@@ -146,6 +146,30 @@ class DerivAPI {
       const errorMsg = e.error ? e.error.message : e.message;
       this.logger.logError(`Erro ao obter detalhes do símbolo ${symbol}: ${errorMsg}. Usando padrão 2.`, "error");
       return 2; // Padrão seguro
+    }
+  }
+
+  async getAvailableVolatilities() {
+    if (!this.api || !this.isConnected) {
+      this.logger.logWarning("API não conectada. Não foi possível obter volatilidades.", "warn");
+      return [];
+    }
+    try {
+      // Busca todos os símbolos ativos
+      const response = await this.api.activeSymbols({ active_symbols: 'brief' });
+      // Filter out only the relevant fields for display: symbol, display_name, and market
+      const volatilities = response.active_symbols
+        .map(s => ({
+          symbol: s.symbol,
+          display_name: s.display_name,
+          market: s.market // Inclui o tipo de mercado
+        }));
+      this.logger.log(`Volatilidades disponíveis obtidas: ${volatilities.length} símbolos.`, "info");
+      return volatilities;
+    } catch (e) {
+      const errorMsg = e.error ? e.error.message : e.message;
+      this.logger.logError(`Erro ao obter volatilidades: ${errorMsg}`, "error");
+      return [];
     }
   }
 

@@ -464,16 +464,7 @@ body {
             <div class="section-title">Mercado</div>
             <div class="form-group">
                 <select id="symbolSelector" onchange="changeSymbol()">
-                    <option value="R_100">Volatility 100 Index</option>
-                    <option value="R_75">Volatility 75 Index</option>
-                    <option value="R_50">Volatility 50 Index</option>
-                    <option value="R_25">Volatility 25 Index</option>
-                    <option value="R_10">Volatility 10 Index</option>
-                    <option value="1HZ100V">Volatility 100 (1s) Index</option>
-                    <option value="1HZ75V">Volatility 75 (1s) Index</option>
-                    <option value="1HZ50V">Volatility 50 (1s) Index</option>
-                    <option value="1HZ25V">Volatility 25 (1s) Index</option>
-                    <option value="1HZ10V">Volatility 10 (1s) Index</option>
+                    <option value="">Carregando mercados...</option>
                 </select>
             </div>
         </div>
@@ -630,6 +621,7 @@ body {
     socket.on('connect', () => {
         socket.emit('get_config');
         socket.emit('get_strategies');
+        socket.emit('get_available_volatilities');
     });
 
     function changeSymbol() {
@@ -838,6 +830,126 @@ body {
             socket.emit('reset_stats');
         }
 }
+
+    socket.on('availableVolatilities', (volatilities) => {
+        updateSymbolSelector(volatilities);
+    });
+
+    function updateSymbolSelector(volatilities) {
+        const selector = document.getElementById('symbolSelector');
+        selector.innerHTML = ''; // Clear existing options
+        
+        if (!volatilities || volatilities.length === 0) {
+            const option = document.createElement('option');
+            option.value = '';
+            option.textContent = 'Nenhuma volatilidade disponível.';
+            selector.appendChild(option);
+            return;
+        }
+
+        // Group volatilities by market
+        const groupedMarkets = {};
+        volatilities.forEach(v => {
+            if (!groupedMarkets[v.market]) {
+                groupedMarkets[v.market] = [];
+            }
+            groupedMarkets[v.market].push(v);
+        });
+
+        // Define display names for markets
+        const marketDisplayNames = {
+            'synthetic_index': 'Índices Sintéticos',
+            'forex': 'Forex',
+            'stocks': 'Ações',
+            'commodities': 'Commodities',
+            'cryptocurrency': 'Criptomoedas',
+        };
+
+        // Sort market keys: synthetic_index first, then others alphabetically
+        const sortedMarketKeys = Object.keys(groupedMarkets).sort((a, b) => {
+            if (a === 'synthetic_index') return -1;
+            if (b === 'synthetic_index') return 1;
+            const nameA = marketDisplayNames[a] || a;
+            const nameB = marketDisplayNames[b] || b;
+            return nameA.localeCompare(nameB);
+        });
+
+        let defaultSymbol = null;
+
+        sortedMarketKeys.forEach(marketKey => {
+            if (marketKey === 'synthetic_index') {
+                const syntheticSymbols = groupedMarkets[marketKey];
+                const syntheticSubGroups = {};
+
+                const subGroupKeywords = ['Volatility', 'Crash', 'Boom', 'Jump', 'Step', 'Range Break'];
+
+                const getSyntheticSubgroup = (displayName) => {
+                    for (const keyword of subGroupKeywords) {
+                        if (displayName.includes(keyword)) {
+                            return keyword;
+                        }
+                    }
+                    return 'Outros'; // Fallback for other indices
+                };
+                
+                syntheticSymbols.forEach(v => {
+                    const subGroup = getSyntheticSubgroup(v.display_name);
+                    if (!syntheticSubGroups[subGroup]) {
+                        syntheticSubGroups[subGroup] = [];
+                    }
+                    syntheticSubGroups[subGroup].push(v);
+                });
+
+                // Sort subgroup keys
+                const sortedSubGroupKeys = Object.keys(syntheticSubGroups).sort();
+
+                sortedSubGroupKeys.forEach(subGroupKey => {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = `Índices Sintéticos - ${subGroupKey}`;
+                    
+                    const sortedSymbols = syntheticSubGroups[subGroupKey].sort((a, b) => a.display_name.localeCompare(b.display_name));
+                    
+                    sortedSymbols.forEach(v => {
+                        const option = document.createElement('option');
+                        option.value = v.symbol;
+                        option.textContent = v.display_name;
+                        optgroup.appendChild(option);
+                        if (!defaultSymbol) {
+                            defaultSymbol = v.symbol;
+                        }
+                    });
+                    selector.appendChild(optgroup);
+                });
+
+            } else {
+                // Logic for other markets remains the same
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = marketDisplayNames[marketKey] || marketKey.replace(/_/g, ' ').toUpperCase();
+                
+                const sortedSymbols = groupedMarkets[marketKey].sort((a, b) => a.display_name.localeCompare(b.display_name));
+
+                sortedSymbols.forEach(v => {
+                    const option = document.createElement('option');
+                    option.value = v.symbol;
+                    option.textContent = v.display_name;
+                    optgroup.appendChild(option);
+                    if (!defaultSymbol) {
+                        defaultSymbol = v.symbol;
+                    }
+                });
+                selector.appendChild(optgroup);
+            }
+        });
+
+        // Select the current config.symbol if it exists in the new list
+        if (currentConfig.symbol && volatilities.some(v => v.symbol === currentConfig.symbol)) {
+            selector.value = currentConfig.symbol;
+        } else if (defaultSymbol) {
+            // Otherwise, select the first available symbol from the sorted list and update config
+            selector.value = defaultSymbol;
+            socket.emit('update_config', { symbol: defaultSymbol });
+        }
+    }
 
 updateInterface();
 </script>

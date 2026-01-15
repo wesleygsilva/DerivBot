@@ -19,6 +19,20 @@ const PORT = 3000;
 // servir arquivos estáticos
 app.use(express.static(__dirname + "/public"));
 
+// NOVO: Endpoint para obter a lista de volatilidades disponíveis
+app.get("/api/volatilities", async (req, res) => {
+  if (!derivAPI.isConnectedToAPI()) {
+    return res.status(503).json({ error: "API da Deriv não conectada." });
+  }
+  try {
+    const volatilities = await derivAPI.getAvailableVolatilities();
+    res.json(volatilities);
+  } catch (error) {
+    logger.logError(`Erro ao servir lista de volatilidades: ${error.message}`, "error");
+    res.status(500).json({ error: "Erro interno ao obter volatilidades." });
+  }
+});
+
 // =========================
 // TOKEN PARA AUTO-CONEXÃO
 // =========================
@@ -59,7 +73,9 @@ let botState = {
   initialBalance: 0,      
   stats: { profit: 0, totalTrades: 0, wins: 0, losses: 0 },
   strategyState: {},
+  availableVolatilities: [], // NOVO: Lista de volatilidades disponíveis
 };
+
 
 // =========================
 // INSTÂNCIAS
@@ -401,6 +417,15 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on("get_available_volatilities", () => {
+    if (derivAPI.isConnectedToAPI()) {
+      derivAPI.getAvailableVolatilities().then(volatilities => {
+        botState.availableVolatilities = volatilities;
+        socket.emit("availableVolatilities", volatilities);
+      });
+    }
+  });
+
   socket.on("reset_stats", resetStats);
   socket.on("clear_digits", () => {
     botState.lastDigits = [];
@@ -453,9 +478,29 @@ function handleAPIResponse(response) {
     // NOVO: Busca as casas decimais do símbolo atual após a conexão
     derivAPI.getSymbolPrecision(config.symbol).then(precision => {
         config.symbolDecimalPlaces = precision;
-        io.emit("botStateUpdate", botState); // Atualiza o front-end com a nova precisão
-        io.emit("configUpdate", config); // Envia config atualizada
         logger.log(`Precisão do símbolo ${config.symbol} definida para ${precision} casas decimais.`, "info");
+        
+        // NOVO: Busca as volatilidades disponíveis após a conexão e precisão do símbolo
+        derivAPI.getAvailableVolatilities().then(volatilities => {
+            botState.availableVolatilities = volatilities;
+            // Opcional: Se o símbolo atual não estiver na lista, seleciona o primeiro
+            if (!volatilities.some(v => v.symbol === config.symbol) && volatilities.length > 0) {
+                const oldSymbol = config.symbol; // Store old symbol for logging
+                config.symbol = volatilities[0].symbol;
+                logger.log(`Símbolo padrão ajustado de ${oldSymbol} para ${config.symbol} (primeira volatilidade disponível).`, "info");
+                // Re-fetch precision for the newly set symbol if it changed
+                derivAPI.getSymbolPrecision(config.symbol).then(newPrecision => {
+                    config.symbolDecimalPlaces = newPrecision;
+                    io.emit("botStateUpdate", botState);
+                    io.emit("configUpdate", config);
+                    io.emit("availableVolatilities", botState.availableVolatilities); // Envia para o front-end
+                });
+            } else {
+                io.emit("botStateUpdate", botState);
+                io.emit("configUpdate", config);
+                io.emit("availableVolatilities", botState.availableVolatilities); // Envia para o front-end
+            }
+        });
     });
 
     io.emit("botStateUpdate", botState);
