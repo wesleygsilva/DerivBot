@@ -32,55 +32,51 @@ class ZeusAI {
   }
 
   processSignal(digit, state) {
+    // --- LÓGICA DE ESPERA APÓS A PRIMEIRA PERDA (martingale) ---
     const lossWaitCount = this.config.lossWaitCount || 0;
 
-    if (state.isWaitingAfterLoss) {
-      // If waiting after a loss, check if current digit is a losing digit (not over 3)
-      if (!this.isOver(digit, 3)) { // If digit is 0, 1, 2, 3
+    if (state.isWaitingAfterLoss && lossWaitCount > 0) { // Estamos ativamente esperando lossWaitCount
+      if (digit <= 3) { // is a losing digit
         state.lossStreak++;
         this.logger.log(`Aguardando sequência de dígitos under 4: ${state.lossStreak}/${lossWaitCount}`);
         if (state.lossStreak >= lossWaitCount) {
-          state.isWaitingAfterLoss = false;
+          state.isWaitingAfterLoss = false; // Parar de esperar
           state.lossStreak = 0;
-          state.martingaleActive = true; // Martingale sequence is now active, so subsequent trades are automatic
-          this.logger.log(`Sequência de dígitos under 4 atingida. Gale ativo, reiniciando entradas.`);
-          
-          // IMMEDIATE ENTRY: Return shouldTrade: true right after meeting the condition
-          return {
+          state.martingaleActive = true; // Ativar entradas a cada tick
+          this.logger.log(`Sequência de under 4 dígitos atingida. Ativando entradas a cada tick.`);
+        } else {
+            return { shouldTrade: false }; // Continua esperando
+        }
+      } else { // is a winning digit, resets waiting for this specific count.
+        if (state.lossStreak > 0) {
+            this.logger.log(`Dígito ${digit} quebrou a sequência under 4. Resetando contagem.`);
+            state.lossStreak = 0;
+        }
+        return { shouldTrade: false }; // Continua esperando pelos dígitos under 4
+      }
+    }
+
+    // --- AÇÃO DE TRADE PADRÃO ---
+    // Faz trade se não está esperando por lossWaitCount (ou já terminou de esperar),
+    // ou se está no modo "a cada tick" (martingaleActive)
+    if (!state.isWaitingAfterLoss || state.martingaleActive) {
+        return {
             shouldTrade: true,
             entryType: "DIGITOVER",
             barrier: 3,
-            payout: 0.56, // Payout para esta entrada
-            reason: "ZeusAI: Entrada Over 3 (após aguardar sequência de dígitos under 4)"
-          };
-        }
-      } else {
-        state.lossStreak = 0; // Reset streak if a winning digit (over 3) appears while waiting
-        this.logger.log(`Dígito vencedor ${digit} enquanto aguardava. Resetando contagem de dígitos under 4.`);
-      }
-      return { shouldTrade: false }; // Do not trade while waiting (if condition not met yet)
+            payout: 0.56,
+            reason: state.martingaleCount > 0 ? `ZeusAI: Gale ${state.martingaleCount} Over 3` : "ZeusAI: Entrada Over 3"
+        };
     }
 
-    // Always trade if not waiting
-    return {
-      shouldTrade: true,
-      entryType: "DIGITOVER",
-      barrier: 3,
-      payout: 0.56, // Payout para esta entrada
-      reason: "ZeusAI: Entrada Over 3"
-    };
+    return { shouldTrade: false }; // Fallback, should not be reached if logic is sound
   }
 
   onTradeResult(trade, state, isWin) {
     if (isWin) {
-      state.martingaleCount = 0;
-      state.currentStake = this.config.baseStake;
-      state.isWaitingAfterLoss = false;
-      state.lossStreak = 0;
-      state.martingaleActive = false; // Reset martingaleActive on win
-      this.logger.log(`WIN!`);
+      this.logger.log(`WIN! Resetando estratégia.`, "success");
+      Object.assign(state, this.reset());
     } else {
-      this.logger.log(`LOSS.`);
       state.martingaleCount++;
       if (state.martingaleCount >= this.config.maxMartingale) {
         this.logger.log(`Limite de perdas atingido.`, "error");
@@ -90,16 +86,24 @@ class ZeusAI {
       
       const lossWaitCount = this.config.lossWaitCount || 0;
       
-      // If we are not yet in an active martingale sequence (i.e., this is the first loss after a win, or after initial waiting)
-      // AND there's a lossWaitCount specified
-      if (!state.martingaleActive && lossWaitCount > 0) {
-        state.isWaitingAfterLoss = true; // Start waiting for losing digits
-        state.lossStreak = 0;
-        this.logger.log(`Derrota. Aguardando ${lossWaitCount} dígitos under 4 para iniciar gale.`);
-      } else {
-        // If martingale is already active or no lossWaitCount, just continue trading on next tick (no further waiting)
-        state.martingaleActive = true; // Ensure martingale is active for subsequent ticks
-        this.logger.log(`Derrota. Continuando gale.`);
+      if (lossWaitCount > 0) {
+        if (!state.isWaitingAfterLoss && state.martingaleCount === 1) { // First loss, start waiting
+          state.isWaitingAfterLoss = true;
+          state.lossStreak = 0;
+          state.martingaleActive = false; // Stop trading every tick for now
+          this.logger.log(`Derrota. Iniciando espera por ${lossWaitCount} dígitos under 4.`);
+        } else if (state.isWaitingAfterLoss) { // Lost DURING the waiting period
+          state.isWaitingAfterLoss = false; // Stop waiting
+          state.lossStreak = 0;
+          state.martingaleActive = true; // Revert to trading every tick
+          this.logger.log(`Derrota durante espera. Revertendo para entradas a cada tick.`);
+        } else { // Already in martingaleActive (trading every tick)
+          state.martingaleActive = true; // Ensure it stays true
+          this.logger.log(`Derrota. Continuando gale a cada tick.`);
+        }
+      } else { // lossWaitCount is 0, so always trade every tick
+        state.martingaleActive = true;
+        this.logger.log(`Derrota. Continuando gale a cada tick (lossWaitCount é 0).`);
       }
     }
     return true; // Continue bot
@@ -120,8 +124,8 @@ class ZeusAI {
   getTradingModes() {
     return {
       "Veloz": { lossWaitCount: 2 },
-      "Balanceado": { lossWaitCount: 3 },
-      "Preciso": { lossWaitCount: 5 }
+      "Balanceado": { lossWaitCount: 5 },
+      "Preciso": { lossWaitCount: 7 }
     };
   }
 
