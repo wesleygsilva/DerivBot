@@ -17,6 +17,7 @@ class DerivAPI {
     this.responseCallback = null;
     this.tickSubscription = null;
     this.balanceSubscription = null;
+    this.symbolDetailsCache = {}; // Cache para detalhes de símbolos
   }
 
   /**
@@ -96,6 +97,56 @@ class DerivAPI {
         this.establishConnection();
       }
     }, this.reconnectDelay);
+  }
+
+  /**
+   * Obtém os detalhes de um símbolo, incluindo o pip_size (casas decimais).
+   * Usa cache para evitar chamadas repetidas.
+   */
+  async getSymbolPrecision(symbol) {
+    if (this.symbolDetailsCache[symbol]) {
+      return this.symbolDetailsCache[symbol].decimal_places; // Retorna o valor derivado
+    }
+
+    if (!this.api || !this.isConnected) {
+      this.logger.logWarning("API não conectada. Não foi possível obter detalhes do símbolo.", "warn");
+      return 2; // Retorna um padrão seguro se não conectado
+    }
+    try {
+      const response = await this.api.activeSymbols({ active_symbols: 'brief' });
+      // Remover logs temporários de depuração
+      // this.logger.log("Active Symbols Response:", JSON.stringify(response.active_symbols, null, 2), "debug");
+
+      const symbolDetails = response.active_symbols.find(s => s.symbol === symbol);
+
+      // Remover logs temporários de depuração
+      // if (symbolDetails) {
+      //    this.logger.log(`Found symbol details for ${symbol}: ${JSON.stringify(symbolDetails, null, 2)}`, "debug");
+      // }
+
+      if (symbolDetails && symbolDetails.pip !== undefined) { // Verifica a propriedade 'pip'
+        let decimalPlaces = 2; // Padrão
+        const pipString = String(symbolDetails.pip);
+        const parts = pipString.split('.');
+        if (parts.length > 1) {
+            decimalPlaces = parts[1].length;
+        } else if (symbolDetails.pip === 1) { // Caso pip seja 1, geralmente significa 0 casas decimais para inteiros
+            decimalPlaces = 0;
+        }
+        
+        // Cacheia os detalhes incluindo a nova propriedade 'decimal_places'
+        this.symbolDetailsCache[symbol] = { ...symbolDetails, decimal_places: decimalPlaces };
+        this.logger.log(`Detalhes do símbolo ${symbol} obtidos. Pip: ${symbolDetails.pip}, Casas decimais: ${decimalPlaces}`, "info");
+        return decimalPlaces; // Retorna as casas decimais derivadas
+      } else {
+        this.logger.logWarning(`Detalhes ou 'pip' para o símbolo ${symbol} não encontrados. Usando padrão 2.`, "warn");
+        return 2; // Padrão seguro
+      }
+    } catch (e) {
+      const errorMsg = e.error ? e.error.message : e.message;
+      this.logger.logError(`Erro ao obter detalhes do símbolo ${symbol}: ${errorMsg}. Usando padrão 2.`, "error");
+      return 2; // Padrão seguro
+    }
   }
 
   /**

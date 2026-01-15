@@ -44,6 +44,7 @@ let config = {
   referenceDigit: 3,
   targetDigit: 2,
   minConsecutive: 3,
+  symbolDecimalPlaces: 2, // NOVO: Armazena as casas decimais do símbolo atual (padrão seguro)
 };
 
 // =========================
@@ -147,8 +148,10 @@ function subscribeToTicks(symbol) {
 // PROCESSAMENTO DE TICKS
 // =========================
 function handleTick(tick) {
-  const quote = Number(tick.quote).toFixed(2);
-  const lastDigit = parseInt(quote.replace('.', '').slice(-1));
+  // Usa a precisão do símbolo obtida dinamicamente
+  const formattedQuote = tick.quote.toFixed(config.symbolDecimalPlaces); 
+  
+  const lastDigit = parseInt(formattedQuote.replace('.', '').slice(-1));
 
   botState.lastDigits.push(lastDigit);
   if (botState.lastDigits.length > 20) botState.lastDigits.shift();
@@ -173,7 +176,9 @@ function handleTick(tick) {
 }
 
 function resolveOpenTrades(tick) {
-  const lastDigit = parseInt(Number(tick.quote).toFixed(2).replace('.', '').slice(-1));
+  // Aplica a mesma lógica de handleTick para consistência
+  const formattedQuote = tick.quote.toFixed(config.symbolDecimalPlaces);
+  const lastDigit = parseInt(formattedQuote.replace('.', '').slice(-1));
 
   for (const id of Object.keys(localTrades)) {
     const trade = localTrades[id];
@@ -205,7 +210,7 @@ function resolveOpenTrades(tick) {
         logger.log(`Trade #${trade.id} WIN | Saída: ${trade.resultDigit} | Lucro: ${profit.toFixed(2)}`);
         if (currentStrategy) currentStrategy.onTradeResult(trade, botState.strategyState, true);
       } else {
-        botState.stats.losses++;
+        botState.losses++;
         logger.log(`Trade #${trade.id} LOSS | Saída: ${trade.resultDigit} | Prejuízo: ${profit.toFixed(2)}`, "error");
         if (currentStrategy) {
           const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false);
@@ -319,15 +324,22 @@ io.on("connection", (socket) => {
     io.emit("botStateUpdate", botState);
   });
 
-  socket.on("update_config", (newConfig) => {
+  socket.on("update_config", async (newConfig) => { // Tornar async
     const oldSymbol = config.symbol;
     updateConfig(newConfig);
     
-    if (newConfig.symbol && newConfig.symbol !== oldSymbol && botState.connected) {
+    // NOVO: Se o símbolo mudou, busca a nova precisão
+    if (config.symbol !== oldSymbol && botState.connected) {
       logger.log(`Símbolo alterado: ${oldSymbol} → ${config.symbol}`, "info");
       subscribeToTicks(config.symbol);
       botState.lastDigits = [];
+      
+      const precision = await derivAPI.getSymbolPrecision(config.symbol);
+      config.symbolDecimalPlaces = precision;
+      logger.log(`Precisão do símbolo ${config.symbol} definida para ${precision} casas decimais.`, "info");
+
       io.emit("botStateUpdate", botState);
+      io.emit("configUpdate", config);
     }
   });
 
@@ -437,6 +449,15 @@ function handleAPIResponse(response) {
     botState.connected = true;
     derivAPI.sendMessage({ balance: 1, subscribe: 1 });
     subscribeToTicks(config.symbol);
+
+    // NOVO: Busca as casas decimais do símbolo atual após a conexão
+    derivAPI.getSymbolPrecision(config.symbol).then(precision => {
+        config.symbolDecimalPlaces = precision;
+        io.emit("botStateUpdate", botState); // Atualiza o front-end com a nova precisão
+        io.emit("configUpdate", config); // Envia config atualizada
+        logger.log(`Precisão do símbolo ${config.symbol} definida para ${precision} casas decimais.`, "info");
+    });
+
     io.emit("botStateUpdate", botState);
     logger.log("Conectado à Deriv API");
   }
