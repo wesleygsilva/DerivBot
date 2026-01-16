@@ -226,7 +226,7 @@ function resolveOpenTrades(tick) {
         logger.log(`Trade #${trade.id} WIN | Saída: ${trade.resultDigit} | Lucro: ${profit.toFixed(2)}`);
         if (currentStrategy) currentStrategy.onTradeResult(trade, botState.strategyState, true);
       } else {
-        botState.losses++;
+        botState.stats.losses++;
         logger.log(`Trade #${trade.id} LOSS | Saída: ${trade.resultDigit} | Prejuízo: ${profit.toFixed(2)}`, "error");
         if (currentStrategy) {
           const shouldContinue = currentStrategy.onTradeResult(trade, botState.strategyState, false);
