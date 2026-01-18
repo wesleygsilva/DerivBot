@@ -1,0 +1,136 @@
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #0e0e0e; /* Dark background */
+    color: #e0e0e0; /* Light text */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    max-width: 400px; /* Max width for the login box */
+}
+
+.login-box {
+    background: #1a1a1a; /* Darker panel background */
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5); /* Subtle shadow */
+    text-align: center;
+    width: 100%;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #ff2b2b 0%, #ee5a24 100%); /* Red/Orange gradient */
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 20px;
+}
+
+.logo-text {
+    font-size: 20px;
+    font-weight: 600;
+    color: #fff;
+}
+
+h2 {
+    color: #fff;
+    margin-bottom: 25px;
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.form-group {
+    margin-bottom: 20px;
+    text-align: left;
+}
+
+.form-group label {
+    display: block;
+    font-size: 14px;
+    color: #aaa;
+    margin-bottom: 8px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="password"],
+.form-group input[type="email"] {
+    width: 100%;
+    padding: 12px;
+    background: #252525; /* Input background */
+    border: 1px solid #333; /* Input border */
+    color: #e0e0e0; /* Input text color */
+    border-radius: 6px;
+    font-size: 15px;
+    box-sizing: border-box; /* Ensure padding doesn't affect width */
+    transition: border-color 0.2s;
+}
+
+.form-group input[type="text"]:focus,
+.form-group input[type="password"]:focus,
+.form-group input[type="email"]:focus {
+    outline: none;
+    border-color: #00d67a; /* Highlight on focus */
+}
+
+.btn {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.btn-login {
+    background: #00d67a; /* Green login button */
+    color: #0e0e0e; /* Dark text on button */
+    margin-top: 10px;
+}
+
+.btn-login:hover {
+    background: #00b064;
+    transform: translateY(-2px);
+}
+
+.signup-text {
+    color: #aaa;
+    font-size: 14px;
+    margin-top: 25px;
+}
+
+.signup-text a {
+    color: #00d67a; /* Green link for signup */
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.signup-text a:hover {
+    color: #00b064;
+    text-decoration: underline;
+}

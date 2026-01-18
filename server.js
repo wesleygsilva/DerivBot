@@ -9,6 +9,9 @@ const path = require("path");
 const SequenceTracker = require("./utils/SequenceTracker");
 const Logger = require("./utils/Logger");
 const DerivAPI = require("./api/DerivAPI");
+const db = require('./db');
+const bcrypt = require('bcrypt');
+const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
@@ -16,7 +19,98 @@ const io = new Server(server);
 
 const PORT = 3000;
 
+// Armazenamento em memória para usuários pendentes
+const pendingUsers = {};
+
+// Middleware para parsear o corpo da requisição
+app.use(express.urlencoded({ extended: true }));
+
 // servir arquivos estáticos
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
+app.post("/login", async (req, res) => {
+    const { username, password } = req.body;
+    try {
+        const { rows } = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+        if (rows.length > 0) {
+            const user = rows[0];
+            const isValid = await bcrypt.compare(password, user.password);
+            if (isValid) {
+                res.redirect('/bot');
+            } else {
+                res.redirect('/');
+            }
+        } else {
+            res.redirect('/');
+        }
+    } catch (error) {
+        console.error('Erro no login:', error);
+        res.redirect('/');
+    }
+});
+
+app.get("/register", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "register.html"));
+});
+
+app.post("/register", async (req, res) => {
+    const { username, password, confirmPassword } = req.body;
+
+    if (password !== confirmPassword) {
+        return res.status(400).send("As senhas não coincidem.");
+    }
+
+    try {
+        const { rows } = await db.query('SELECT * FROM users WHERE username = $1', [username]);
+        if (rows.length > 0) {
+            return res.status(400).send("Usuário já cadastrado.");
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const token = crypto.randomBytes(32).toString('hex');
+
+        pendingUsers[token] = { username, password: hashedPassword };
+
+        // Simulação de envio de email
+        console.log(`Abra este link para confirmar seu email: http://localhost:3000/confirm/${token}`);
+
+        res.sendFile(path.join(__dirname, "public", "confirmation-sent.html"));
+
+    } catch (error) {
+        console.error('Erro no registro:', error);
+        res.status(500).send("Erro interno do servidor.");
+    }
+});
+
+app.get("/confirm/:token", async (req, res) => {
+    const { token } = req.params;
+
+    const userData = pendingUsers[token];
+
+    if (!userData) {
+        return res.status(400).send("Token de confirmação inválido ou expirado.");
+    }
+
+    try {
+        await db.query('INSERT INTO users (username, password, registration_date) VALUES ($1, $2, $3)', [userData.username, userData.password, new Date()]);
+        
+        delete pendingUsers[token]; // Remove o usuário pendente
+
+        res.sendFile(path.join(__dirname, "public", "registration-success.html"));
+
+    } catch (error) {
+        console.error('Erro ao confirmar o usuário:', error);
+        res.status(500).send("Erro ao salvar o usuário no banco de dados.");
+    }
+});
+
+
+app.get("/bot", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 app.use(express.static(__dirname + "/public"));
 
 // NOVO: Endpoint para obter a lista de volatilidades disponíveis

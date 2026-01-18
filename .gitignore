@@ -18,6 +18,9 @@ pnpm-debug.log*
 dist/
 build/
 
+# Configurações sensíveis
+config/db.config.js
+
 # Cache
 .cache/
 .next/

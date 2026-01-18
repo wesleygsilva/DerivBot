@@ -11,7 +11,9 @@
     "@deriv/deriv-api": "^1.0.15",
     "express": "^4.21.2",
     "socket.io": "^4.8.1",
-    "ws": "^8.18.3"
+    "ws": "^8.18.3",
+    "pg": "^8.12.0",
+    "bcrypt": "^5.1.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

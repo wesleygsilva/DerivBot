@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cadastro Concluído - Deriv Bot</title>
+    <link rel="stylesheet" href="login.css"> <!-- Reutilizando o mesmo CSS -->
+    <style>
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #00d67a;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 25px;
+            animation: pop-in 0.5s ease-out;
+        }
+        .success-icon svg {
+            width: 40px;
+            height: 40px;
+        }
+        @keyframes pop-in {
+            0% { transform: scale(0.5); opacity: 0; }
+            80% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <div class="success-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17l-4.17-4.17-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+            </div>
+            <h2>Cadastro Concluído!</h2>
+            <p style="color: #aaa; font-size: 16px; line-height: 1.6;">
+                Sua conta foi criada com sucesso. Agora você já pode fazer o login.
+            </p>
+            <a href="/login.html" class="btn btn-login" style="margin-top: 30px; text-decoration: none;">Ir para o Login</a>
+        </div>
+    </div>
+</body>
+</html>
