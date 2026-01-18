@@ -5,8 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Deriv Bot</title>
     <link rel="stylesheet" href="login.css">
+    <style>
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #ff4757;
+            color: #fff;
+            text-align: center;
+            border-radius: 8px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            transform: translateX(-50%);
+            top: 30px;
+            font-size: 17px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+        }
+        #toast.show {
+            visibility: visible;
+            -webkit-animation: fadein 0.5s, fadeout 0.5s 2.5s;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        @-webkit-keyframes fadein {
+            from {top: 0; opacity: 0;} 
+            to {top: 30px; opacity: 1;}
+        }
+        @keyframes fadein {
+            from {top: 0; opacity: 0;}
+            to {top: 30px; opacity: 1;}
+        }
+        @-webkit-keyframes fadeout {
+            from {top: 30px; opacity: 1;} 
+            to {top: 0; opacity: 0;}
+        }
+        @keyframes fadeout {
+            from {top: 30px; opacity: 1;}
+            to {top: 0; opacity: 0;}
+        }
+    </style>
 </head>
 <body>
+    <div id="toast"></div>
     <div class="login-container">
         <div class="login-box">
             <div class="logo">
@@ -28,5 +68,29 @@
             </form>
         </div>
     </div>
+
+    <script>
+        function showToast(message) {
+            const toast = document.getElementById("toast");
+            toast.textContent = message;
+            toast.className = "show";
+            setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+        }
+
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const error = urlParams.get('error');
+            
+            if (error) {
+                let message = "Ocorreu um erro inesperado.";
+                if (error === 'invalid_credentials') {
+                    message = "Usuário ou senha inválidos.";
+                } else if (error === 'db_error') {
+                    message = "Erro no servidor. Tente mais tarde.";
+                }
+                showToast(message);
+            }
+        });
+    </script>
 </body>
 </html>

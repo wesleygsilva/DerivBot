@@ -20,6 +20,7 @@ build/
 
 # Configurações sensíveis
 config/db.config.js
+sessions/
 
 # Cache
 .cache/

@@ -12,6 +12,8 @@ const DerivAPI = require("./api/DerivAPI");
 const db = require('./db');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
+const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 
 const app = express();
 const server = http.createServer(app);
@@ -19,16 +21,42 @@ const io = new Server(server);
 
 const PORT = 3000;
 
+// Configuração da sessão
+app.use(session({
+    store: new FileStore({ path: './sessions/', ttl: 86400, retries: 0 }),
+    secret: 'seu_segredo_super_secreto', // Troque por um segredo forte em produção
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false } // Em produção, use true com HTTPS
+}));
+
+// Middleware de autenticação
+const isAuthenticated = (req, res, next) => {
+    if (req.session.user) {
+        return next();
+    }
+    res.redirect('/');
+};
+
 // Armazenamento em memória para usuários pendentes
 const pendingUsers = {};
 
 // Middleware para parsear o corpo da requisição
 app.use(express.urlencoded({ extended: true }));
 
-// servir arquivos estáticos
-app.get("/", (req, res) => {
+// --- Rotas Públicas ---
+app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
+app.get('/login.html', (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+app.get('/register.html', (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "register.html"));
+});
+
+// Servir assets estáticos (CSS, etc)
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.post("/login", async (req, res) => {
     const { username, password } = req.body;
@@ -38,55 +66,52 @@ app.post("/login", async (req, res) => {
             const user = rows[0];
             const isValid = await bcrypt.compare(password, user.password);
             if (isValid) {
-                res.redirect('/bot');
-            } else {
-                res.redirect('/');
+                req.session.user = { id: user.id, username: user.username };
+                return res.redirect('/bot');
             }
-        } else {
-            res.redirect('/');
         }
+        return res.redirect('/login.html?error=invalid_credentials');
     } catch (error) {
         console.error('Erro no login:', error);
-        res.redirect('/');
+        return res.redirect('/login.html?error=db_error');
     }
-});
-
-app.get("/register", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "register.html"));
 });
 
 app.post("/register", async (req, res) => {
     const { username, password, confirmPassword } = req.body;
 
     if (password !== confirmPassword) {
-        return res.status(400).send("As senhas não coincidem.");
+        return res.redirect('/register.html?error=password_mismatch');
     }
 
     try {
+        const existingPendingUser = Object.values(pendingUsers).find(user => user.username === username);
+        if (existingPendingUser) {
+            return res.redirect('/register.html?error=user_pending');
+        }
+
         const { rows } = await db.query('SELECT * FROM users WHERE username = $1', [username]);
         if (rows.length > 0) {
-            return res.status(400).send("Usuário já cadastrado.");
+            return res.redirect('/register.html?error=user_exists');
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         const token = crypto.randomBytes(32).toString('hex');
-
         pendingUsers[token] = { username, password: hashedPassword };
 
-        // Simulação de envio de email
         console.log(`Abra este link para confirmar seu email: http://localhost:3000/confirm/${token}`);
-
-        res.sendFile(path.join(__dirname, "public", "confirmation-sent.html"));
+        
+        req.session.canViewConfirmationSent = true;
+        res.redirect('/confirmation-sent');
 
     } catch (error) {
         console.error('Erro no registro:', error);
-        res.status(500).send("Erro interno do servidor.");
+        res.redirect('/register.html?error=db_error');
     }
 });
 
 app.get("/confirm/:token", async (req, res) => {
     const { token } = req.params;
-
     const userData = pendingUsers[token];
 
     if (!userData) {
@@ -94,27 +119,55 @@ app.get("/confirm/:token", async (req, res) => {
     }
 
     try {
-        await db.query('INSERT INTO users (username, password, registration_date) VALUES ($1, $2, $3)', [userData.username, userData.password, new Date()]);
+        await db.query('INSERT INTO users (username, password) VALUES ($1, $2)', [userData.username, userData.password]);
+        delete pendingUsers[token];
         
-        delete pendingUsers[token]; // Remove o usuário pendente
-
-        res.sendFile(path.join(__dirname, "public", "registration-success.html"));
-
+        req.session.canViewRegistrationSuccess = true;
+        res.redirect('/registration-success');
     } catch (error) {
         console.error('Erro ao confirmar o usuário:', error);
         res.status(500).send("Erro ao salvar o usuário no banco de dados.");
     }
 });
 
-
-app.get("/bot", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+app.get('/confirmation-sent', (req, res) => {
+    if (!req.session.canViewConfirmationSent) {
+        return res.redirect('/');
+    }
+    delete req.session.canViewConfirmationSent;
+    res.sendFile(path.join(__dirname, "views", "confirmation-sent.html"));
 });
 
-app.use(express.static(__dirname + "/public"));
+app.get('/registration-success', (req, res) => {
+    if (!req.session.canViewRegistrationSuccess) {
+        return res.redirect('/');
+    }
+    delete req.session.canViewRegistrationSuccess;
+    res.sendFile(path.join(__dirname, "views", "registration-success.html"));
+});
 
-// NOVO: Endpoint para obter a lista de volatilidades disponíveis
-app.get("/api/volatilities", async (req, res) => {
+
+app.get("/logout", (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.redirect('/bot');
+        }
+        res.clearCookie('connect.sid');
+        res.redirect('/');
+    });
+});
+
+// --- Rotas Protegidas ---
+app.get("/bot", isAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, "views", "index.html"));
+});
+
+// Protege o acesso direto ao index.html
+app.get("/index.html", isAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, "views", "index.html"));
+});
+
+app.get("/api/volatilities", isAuthenticated, async (req, res) => {
   if (!derivAPI.isConnectedToAPI()) {
     return res.status(503).json({ error: "API da Deriv não conectada." });
   }
