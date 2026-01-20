@@ -479,12 +479,7 @@ body {
                 </select>
             </div>
                         
-            <div id="tradingModesContainer" class="form-group" style="display: none;">
-                <label for="tradingModeSelector">Modo de Negociação</label>
-                <select id="tradingModeSelector" onchange="changeTradingMode()">
-                    <option value="">Manual</option>
-                </select>
-            </div>
+
 
             <!-- Configurações da Estratégia (inline) -->
             <div style="margin-top: 16px;" id="strategyConfigContainer">
@@ -495,6 +490,14 @@ body {
         <!-- Configurações Comuns -->
         <div class="panel-section">
             <div class="section-title">Configurações Comuns</div>
+            <div class="form-group">
+                <label for="tradingModeSelector">Modo de Negociação</label>
+                <select id="tradingModeSelector" onchange="changeTradingMode()">
+                    <option value="Veloz">Veloz</option>
+                    <option value="Balanceado" selected>Balanceado</option>
+                    <option value="Preciso">Preciso</option>
+                </select>
+            </div>
             <div class="form-group">
                 <label for="riskManagement">Gerenciamento de Risco</label>
                 <select id="riskManagement">
@@ -717,19 +720,21 @@ body {
         const container = document.getElementById('tradingModesContainer');
         const selector = document.getElementById('tradingModeSelector');
         
-        selector.innerHTML = ''; // No "Manual" option
+        selector.innerHTML = ''; // Clear previous options
 
-        if (Object.keys(currentTradingModes).length > 0) {
-            container.style.display = 'block';
-            for (const modeName in currentTradingModes) {
-                const option = document.createElement('option');
-                option.value = modeName;
-                option.textContent = modeName;
-                selector.appendChild(option);
+        const modes = ['Veloz', 'Balanceado', 'Preciso'];
+        modes.forEach(modeName => {
+            const option = document.createElement('option');
+            option.value = modeName;
+            option.textContent = modeName;
+            if (modeName === 'Balanceado') {
+                option.selected = true;
             }
-        } else {
-            container.style.display = 'none';
-        }
+            selector.appendChild(option);
+        });
+
+        // This was previously handled in the if/else, but now we always want it visible.
+        container.style.display = 'block'; 
     }
 
     function changeTradingMode() {
@@ -793,8 +798,11 @@ body {
         config.maxMartingale = parseInt(document.getElementById('maxMartingale').value) || 6;
         config.profitGoal = parseFloat(document.getElementById('profitGoal').value) || 0;
         
-        // Add selected mode settings
-        Object.assign(config, selectedModeSettings);
+        // Get selected trading mode and apply its settings
+        const selectedMode = document.getElementById('tradingModeSelector').value;
+        if (selectedMode && currentTradingModes[selectedMode]) {
+            Object.assign(config, currentTradingModes[selectedMode]);
+        }
 
         config.symbol = document.getElementById('symbolSelector').value;
 
