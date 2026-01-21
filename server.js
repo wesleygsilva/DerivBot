@@ -238,7 +238,7 @@ const strategies = {};
 const strategiesDir = path.join(__dirname, "strategies");
 
 fs.readdirSync(strategiesDir).forEach(file => {
-  if (file.endsWith(".js")) {
+  if (file.endsWith(".js") && file !== "Base.js") {
     const StrategyClass = require(path.join(strategiesDir, file));
     const strategyName = path.basename(file, ".js");
     strategies[strategyName] = new StrategyClass(config, logger);
@@ -605,6 +605,7 @@ function getStrategyDescription(strategyName) {
   const desc = {
     ParityAI: "Aguarda sequências de dígitos pares/ímpares para fazer entrada no oposto",
     GladiatorAI: "Estratégia Gladiator AI, aguarda sequências de dígitos OVER/UNDER para fazer entrada",
+    WinnerAI: "Estratégia Winner AI, configurada para entradas Over/Under com gale.",
     ZeusAI: "Entra sempre over 3. A espera para reentrar após uma perda é definida pelos modos de negociação."
   };
   return desc[strategyName] || "";
