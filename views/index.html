@@ -432,6 +432,44 @@ body {
     min-width: 80px; /* Reduced min-width */
     margin-bottom: 0;
 }
+
+.hamburger-menu {
+    position: relative;
+    display: inline-block;
+}
+
+.hamburger-icon {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.menu-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    background-color: #1a1a1a;
+    min-width: 200px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+}
+
+.menu-content a {
+    color: #e0e0e0;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+}
+
+.menu-content a:hover {
+    background-color: #252525;
+}
+
+.show {
+    display: block;
+}
 </style>
 </head>
 <body>
@@ -442,501 +480,488 @@ body {
         <span class="logo-text">DERIV BOT</span>
     </div>
     <div class="balance-display" id="navBalance">$0.00</div>
-    <a href="/logout" style="color: #ff4757; text-decoration: none; margin-left: 15px; font-weight: 600;">Sair</a>
-</div>
-
-<div class="main-container">
-    <!-- PAINEL ESQUERDO -->
-    <div class="left-panel">
-        <!-- Conexão -->
-        <div class="panel-section">
-            <div class="connection-status disconnected" id="connectionStatus">Desconectado</div>
-        </div>
-
-
-        <!-- Lucro/Prejuízo -->
-        <!-- <div class="panel-section">
-            <div class="section-title">Lucro/Prejuízo</div>
-            <div class="value-display" id="profitDisplay">$0.00</div>
-        </div> -->
-
-        <!-- Mercado -->
-        <div class="panel-section">
-            <div class="section-title">Mercado</div>
-            <div class="form-group">
-                <select id="symbolSelector" onchange="changeSymbol()">
-                    <option value="">Carregando mercados...</option>
-                </select>
-            </div>
-        </div>
-
-        <!-- Estratégia -->
-        <div class="panel-section">
-            <div class="section-title">Estratégia</div>
-            <div class="form-group">
-                <select id="strategySelector" onchange="changeStrategy()">
-                    <option value="">Carregando...</option>
-                </select>
-            </div>
-                        
-
-
-            <!-- Configurações da Estratégia (inline) -->
-            <div style="margin-top: 16px;" id="strategyConfigContainer">
-                <div id="strategyConfigFields"></div>
-            </div>
-        </div>
-
-        <!-- Configurações Comuns -->
-        <div class="panel-section">
-            <div class="section-title">Configurações Comuns</div>
-            <div class="form-group">
-                <label for="tradingModeSelector">Modo de Negociação</label>
-                <select id="tradingModeSelector" onchange="changeTradingMode()">
-                    <option value="Veloz">Veloz</option>
-                    <option value="Balanceado" selected>Balanceado</option>
-                    <option value="Preciso">Preciso</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="riskManagement">Gerenciamento de Risco</label>
-                <select id="riskManagement">
-                    <option value="1">Fixo</option>
-                    <option value="2.8">Conservador</option>
-                    <option value="3" selected>Otimizado</option>
-                    <option value="3.2">Agressivo</option>
-                </select>
-            </div>
-            <div class="inline-fields-group">
-                <div class="form-group">
-                    <label for="baseStake">Stake Inicial</label>
-                    <input type="number" id="baseStake" value="0.35" min="0.35" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label for="profitGoal">Lucro Alvo</label>
-                    <input type="number" id="profitGoal" value="10.00" min="0" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label for="maxMartingale">Limite de Perda</label>
-                    <input type="number" id="maxMartingale" value="6" min="1" max="15">
-                </div>
-            </div>
-        </div>
-        <div class="panel-section">
-            <button class="btn btn-start" onclick="startBot()" id="startBtn" disabled>Iniciar Bot</button>
-            <button class="btn btn-stop" onclick="stopBot()" id="stopBtn" disabled>Pausar Bot</button>
+    <div class="hamburger-menu">
+        <button class="hamburger-icon" onclick="toggleMenu()">&#9776;</button>
+        <div class="menu-content" id="menuContent">
+            <a href="/martingale-calculator.html" target="_blank">Calculadora de martingale</a>
+            <a href="#">Configurações</a>
+            <a href="/logout">Sair</a>
         </div>
     </div>
-
-    <!-- PAINEL CENTRAL -->
-    <div class="center-panel">
-        <!-- Dígitos -->
-        <div class="digits-section">
-            <div class="digits-header">
-                <h3>DÍGITOS</h3>
-                <button class="btn-clear" onclick="clearDigits()">Limpar</button>
-            </div>
-            <div class="digits-display" id="digitsDisplay"></div>
-        </div>
-
-        <!-- Logs -->
-        <div class="logs-section">
-            <div class="logs-header">
-                <h3>LOGS DO SISTEMA</h3>
-                <div class="logs-actions">
-                    <button class="btn-download" onclick="downloadFullLog()">Logs</button>
-                    <button class="btn-download" onclick="downloadSequenceReport()">Sequências</button>
-                    <button class="btn-clear" onclick="clearLogs()">Limpar</button>
-                </div>
-            </div>
-            <div class="logs-container" id="logsContainer"></div>
-        </div>
-    </div>
-
-    <!-- PAINEL DIREITO -->
-    <div class="right-panel">
-        <div class="panel-section">
-            <div class="section-title">Estatísticas</div>
-            <!-- Lucro/Prejuízo -->
+</div>    
+    <div class="main-container">
+        <!-- PAINEL ESQUERDO -->
+        <div class="left-panel">
+            <!-- Conexão -->
             <div class="panel-section">
+                <div class="connection-status disconnected" id="connectionStatus">Desconectado</div>
+            </div>
+    
+    
+            <!-- Lucro/Prejuízo -->
+            <!-- <div class="panel-section">
                 <div class="section-title">Lucro/Prejuízo</div>
                 <div class="value-display" id="profitDisplay">$0.00</div>
-            </div>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value" id="winsCount">0</div>
-                    <div class="stat-label">Vitórias</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="lossesCount">0</div>
-                    <div class="stat-label">Derrotas</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="totalTradesStats">0</div>
-                    <div class="stat-label">Total</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" id="winRateStats">0%</div>
-                    <div class="stat-label">Win Rate</div>
+            </div> -->
+    
+            <!-- Mercado -->
+            <div class="panel-section">
+                <div class="section-title">Mercado</div>
+                <div class="form-group">
+                    <select id="symbolSelector" onchange="changeSymbol()">
+                        <option value="">Carregando mercados...</option>
+                    </select>
                 </div>
             </div>
-            <button class="btn btn-reset" onclick="resetStats()">Reset Estatísticas</button>
+    
+            <!-- Estratégia -->
+            <div class="panel-section">
+                <div class="section-title">Estratégia</div>
+                <div class="form-group">
+                    <select id="strategySelector" onchange="changeStrategy()">
+                        <option value="">Carregando...</option>
+                    </select>
+                </div>
+                            
+    
+    
+                <!-- Configurações da Estratégia (inline) -->
+                <div style="margin-top: 16px;" id="strategyConfigContainer">
+                    <div id="strategyConfigFields"></div>
+                </div>
+            </div>
+    
+            <!-- Configurações Comuns -->
+            <div class="panel-section">
+                <div class="section-title">Configurações Comuns</div>
+                <div class="form-group">
+                    <label for="tradingModeSelector">Modo de Negociação</label>
+                    <select id="tradingModeSelector" onchange="changeTradingMode()">
+                        <option value="Veloz">Veloz</option>
+                        <option value="Balanceado" selected>Balanceado</option>
+                        <option value="Preciso">Preciso</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="riskManagement">Gerenciamento de Risco</label>
+                    <select id="riskManagement">
+                        <option value="1">Fixo</option>
+                        <option value="2.8">Conservador</option>
+                        <option value="3" selected>Otimizado</option>
+                        <option value="3.2">Agressivo</option>
+                    </select>
+                </div>
+                <div class="inline-fields-group">
+                    <div class="form-group">
+                        <label for="baseStake">Stake Inicial</label>
+                        <input type="number" id="baseStake" value="0.35" min="0.35" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="profitGoal">Lucro Alvo</label>
+                        <input type="number" id="profitGoal" value="10.00" min="0" step="0.01">
+                    </div>
+                    <div class="form-group">
+                        <label for="maxMartingale">Limite de Perda</label>
+                        <input type="number" id="maxMartingale" value="6" min="1" max="15">
+                    </div>
+                </div>
+            </div>
+            <div class="panel-section">
+                <button class="btn btn-start" onclick="startBot()" id="startBtn" disabled>Iniciar Bot</button>
+                <button class="btn btn-stop" onclick="stopBot()" id="stopBtn" disabled>Pausar Bot</button>
+            </div>
+        </div>
+    
+        <!-- PAINEL CENTRAL -->
+        <div class="center-panel">
+            <!-- Dígitos -->
+            <div class="digits-section">
+                <div class="digits-header">
+                    <h3>DÍGITOS</h3>
+                    <button class="btn-clear" onclick="clearDigits()">Limpar</button>
+                </div>
+                <div class="digits-display" id="digitsDisplay"></div>
+            </div>
+    
+            <!-- Logs -->
+            <div class="logs-section">
+                <div class="logs-header">
+                    <h3>LOGS DO SISTEMA</h3>
+                    <div class="logs-actions">
+                        <button class="btn-download" onclick="downloadFullLog()">Logs</button>
+                        <button class="btn-download" onclick="downloadSequenceReport()">Sequências</button>
+                        <button class="btn-clear" onclick="clearLogs()">Limpar</button>
+                    </div>
+                </div>
+                <div class="logs-container" id="logsContainer"></div>
+            </div>
+        </div>
+    
+        <!-- PAINEL DIREITO -->
+        <div class="right-panel">
+            <div class="panel-section">
+                <div class="section-title">Estatísticas</div>
+                <!-- Lucro/Prejuízo -->
+                <div class="panel-section">
+                    <div class="section-title">Lucro/Prejuízo</div>
+                    <div class="value-display" id="profitDisplay">$0.00</div>
+                </div>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="winsCount">0</div>
+                        <div class="stat-label">Vitórias</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="lossesCount">0</div>
+                        <div class="stat-label">Derrotas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalTradesStats">0</div>
+                        <div class="stat-label">Total</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="winRateStats">0%</div>
+                        <div class="stat-label">Win Rate</div>
+                    </div>
+                </div>
+                <button class="btn btn-reset" onclick="resetStats()">Reset Estatísticas</button>
+            </div>
         </div>
     </div>
-</div>
-
-<script>
-    const socket = io();
-    let botState = {};
-    let currentConfig = {};
-    let availableStrategies = {};
-    let currentStrategySchema = {};
-    let currentTradingModes = {};
-    let selectedModeSettings = {};
-
-    socket.on('botStateUpdate', (state) => {
-        botState = state;
-        updateInterface();
-    });
-
-    socket.on('configUpdate', (config) => {
-        currentConfig = config;
-        updateConfigInterface();
-        updateInterface();
-    });
-
-    socket.on('strategiesUpdate', (strategies) => {
-        availableStrategies = strategies;
-        updateStrategySelector();
-    });
-
-    socket.on('currentStrategyInfo', (info) => {
-        updateStrategyInfo(info);
-    });
-
-    socket.on('newLog', (log) => {
-        addLogToInterface(log);
-    });
-
-    socket.on('downloadFile', (fileData) => {
-        downloadFile(fileData.filename, fileData.content, fileData.type);
-    });
-
-    socket.on('connect', () => {
-        socket.emit('get_config');
-        socket.emit('get_strategies');
-        socket.emit('get_available_volatilities');
-    });
-
-    function changeSymbol() {
-        const newSymbol = document.getElementById('symbolSelector').value;
-        socket.emit('update_config', { symbol: newSymbol });
-        clearDigits(); // Clear digits immediately on client side when changing symbol
-    }
-
-    function updateInterface() {
-        // Conexão
-        const statusEl = document.getElementById('connectionStatus');
-        if (botState.connected) {
-            statusEl.textContent = 'Conectado';
-            statusEl.className = 'connection-status connected';
-            document.getElementById('startBtn').disabled = false;
-            document.getElementById('stopBtn').disabled = false;
-        } else {
-            statusEl.textContent = 'Desconectado';
-            statusEl.className = 'connection-status disconnected';
-            document.getElementById('startBtn').disabled = true;
-            document.getElementById('stopBtn').disabled = true;
-        }
-
-        // Saldo
-        const balance = (botState.balance || 0).toFixed(2);
-        document.getElementById('navBalance').textContent = `$${balance}`;
-
-        // Lucro/Prejuízo
-        const profitEl = document.getElementById('profitDisplay');
-        const profit = botState.stats?.profit || 0;
-        profitEl.textContent = `$${profit.toFixed(2)}`;
-        profitEl.className = profit >= 0 ? 'value-display positive' : 'value-display negative';
-
-        // Estatísticas
-        document.getElementById('winsCount').textContent = botState.stats?.wins || 0;
-        document.getElementById('lossesCount').textContent = botState.stats?.losses || 0;
-        document.getElementById('totalTradesStats').textContent = botState.stats?.totalTrades || 0;
-        
-        const totalTrades = botState.stats?.totalTrades || 0;
-        const wins = botState.stats?.wins || 0;
-        const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : 0;
-        document.getElementById('winRateStats').textContent = `${winRate}%`;
-
-        // Dígitos
-        console.log('botState.lastDigits on updateInterface:', botState.lastDigits);
-        const digitsContainer = document.getElementById('digitsDisplay');
-        digitsContainer.innerHTML = '';
-        if (botState.lastDigits && botState.lastDigits.length > 0) {
-            botState.lastDigits.forEach(digit => {
-                const digitEl = document.createElement('div');
-                digitEl.className = `digit ${digit % 2 === 0 ? 'even' : 'odd'}`;
-                digitEl.textContent = digit;
-                digitsContainer.appendChild(digitEl);
-            });
-        }
-    }
-
-    function updateStrategySelector() {
-        const selector = document.getElementById('strategySelector');
-        selector.innerHTML = '<option value="">Selecione</option>';
-        
-        Object.keys(availableStrategies).forEach(strategyName => {
-            const option = document.createElement('option');
-            option.value = strategyName;
-            option.textContent = availableStrategies[strategyName].name || strategyName;
-            selector.appendChild(option);
+    
+    <script>
+        const socket = io();
+        let botState = {};
+        let currentConfig = {};
+        let availableStrategies = {};
+        let currentStrategySchema = {};
+        let currentTradingModes = {};
+        let selectedModeSettings = {};
+    
+        socket.on('botStateUpdate', (state) => {
+            botState = state;
+            updateInterface();
         });
-
-        if (currentConfig.strategy) {
-            selector.value = currentConfig.strategy;
-        }
-    }
-
-    function updateConfigInterface() {
-        if (currentConfig.symbol) {
-            document.getElementById('symbolSelector').value = currentConfig.symbol;
-        }
-
-        if (currentConfig.strategy && availableStrategies[currentConfig.strategy]) {
-            generateStrategyConfigFields(currentConfig.strategy);
-        }
-    }
-
-    function updateStrategyInfo(info) {
-        currentStrategySchema = info.schema || {};
-        currentTradingModes = info.tradingModes || {};
-        generateStrategyConfigFields(currentConfig.strategy);
-        updateTradingModesUI();
-    }
-
-    function updateTradingModesUI() {
-        const container = document.getElementById('tradingModesContainer');
-        const selector = document.getElementById('tradingModeSelector');
-        
-        selector.innerHTML = ''; // Clear previous options
-
-        const modes = ['Veloz', 'Balanceado', 'Preciso'];
-        modes.forEach(modeName => {
-            const option = document.createElement('option');
-            option.value = modeName;
-            option.textContent = modeName;
-            if (modeName === 'Balanceado') {
-                option.selected = true;
-            }
-            selector.appendChild(option);
+    
+        socket.on('configUpdate', (config) => {
+            currentConfig = config;
+            updateConfigInterface();
+            updateInterface();
         });
-
-        // This was previously handled in the if/else, but now we always want it visible.
-        container.style.display = 'block'; 
-    }
-
-    function changeTradingMode() {
-        const selectedMode = document.getElementById('tradingModeSelector').value;
-        if (selectedMode && currentTradingModes[selectedMode]) {
-            selectedModeSettings = currentTradingModes[selectedMode];
-        } else {
-            selectedModeSettings = {};
-        }
-    }
-
-    function generateStrategyConfigFields(strategyName) {
-        // This function is now obsolete, as dynamic fields are not displayed.
-        const container = document.getElementById('strategyConfigFields');
-        container.innerHTML = '';
-        container.style.display = 'none';
-    }
-
-    function changeStrategy() {
-        const selectedStrategy = document.getElementById('strategySelector').value;
-        console.log('Mudando estratégia para:', selectedStrategy);
-        if (selectedStrategy) {
-            socket.emit('change_strategy', selectedStrategy);
-        }
-    }
-
-    function addLogToInterface(log) {
-        const logsContainer = document.getElementById('logsContainer');
-        const logEl = document.createElement('div');
-        logEl.className = `log-entry ${log.type}`;
-        logEl.innerHTML = `<strong>${log.timestamp}</strong> ${log.message}`;
-        logsContainer.insertBefore(logEl, logsContainer.firstChild);
-
-        while (logsContainer.children.length > 50) {
-            logsContainer.removeChild(logsContainer.lastChild);
-        }
-    }
-
-
-
-    function clearLogs() {
-        document.getElementById('logsContainer').innerHTML = '';
-    }
-
-    function clearDigits() {
-        socket.emit('clear_digits');
-    }
-
-    function connectBot() {
-        const token = 'NSZPzUBXPi37dnV'; 
-        socket.emit('connect_bot', token);
-    }
-
-    function startBot() {
-        // Atualizar configurações antes de iniciar
-        const config = {};
-        
-        // Read common fields
-        config.baseStake = parseFloat(document.getElementById('baseStake').value) || 0.35;
-        config.multiplier = parseFloat(document.getElementById('riskManagement').value) || 2.2;
-        config.maxMartingale = parseInt(document.getElementById('maxMartingale').value) || 6;
-        config.profitGoal = parseFloat(document.getElementById('profitGoal').value) || 0;
-        
-        // Get selected trading mode and apply its settings
-        const selectedMode = document.getElementById('tradingModeSelector').value;
-        if (selectedMode && currentTradingModes[selectedMode]) {
-            Object.assign(config, currentTradingModes[selectedMode]);
-        }
-
-        config.symbol = document.getElementById('symbolSelector').value;
-
-        socket.emit('update_config', config);
-        socket.emit('start_bot');
-    }
-
-    function stopBot() {
-        socket.emit('stop_bot');
-    }
-
-    function downloadFile(filename, content, mimeType) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-    }
-
-    function downloadFullLog() {
-        socket.emit('download_full_log');
-    }
-
-    function downloadSequenceReport() {
-        socket.emit('download_sequence_report');
-    }
-
-    function resetStats() {
-        if (confirm('Tem certeza que deseja resetar todas as estatísticas?')) {
-            socket.emit('reset_stats');
-        }
-}
-
-    socket.on('availableVolatilities', (volatilities) => {
-        updateSymbolSelector(volatilities);
-    });
-
-    function updateSymbolSelector(volatilities) {
-        const selector = document.getElementById('symbolSelector');
-        selector.innerHTML = ''; // Clear existing options
-        
-        if (!volatilities || volatilities.length === 0) {
-            const option = document.createElement('option');
-            option.value = '';
-            option.textContent = 'Nenhuma volatilidade disponível.';
-            selector.appendChild(option);
-            return;
-        }
-
-        // Group volatilities by market
-        const groupedMarkets = {};
-        volatilities.forEach(v => {
-            if (!groupedMarkets[v.market]) {
-                groupedMarkets[v.market] = [];
-            }
-            groupedMarkets[v.market].push(v);
+    
+        socket.on('strategiesUpdate', (strategies) => {
+            availableStrategies = strategies;
+            updateStrategySelector();
         });
-
-        // Define display names for markets
-        const marketDisplayNames = {
-            'synthetic_index': 'Índices Sintéticos',
-            'forex': 'Forex',
-            'stocks': 'Ações',
-            'commodities': 'Commodities',
-            'cryptocurrency': 'Criptomoedas',
-        };
-
-        // Sort market keys: synthetic_index first, then others alphabetically
-        const sortedMarketKeys = Object.keys(groupedMarkets).sort((a, b) => {
-            if (a === 'synthetic_index') return -1;
-            if (b === 'synthetic_index') return 1;
-            const nameA = marketDisplayNames[a] || a;
-            const nameB = marketDisplayNames[b] || b;
-            return nameA.localeCompare(nameB);
+    
+        socket.on('currentStrategyInfo', (info) => {
+            updateStrategyInfo(info);
         });
-
-        let defaultSymbol = null;
-
-        sortedMarketKeys.forEach(marketKey => {
-            if (marketKey === 'synthetic_index') {
-                const syntheticSymbols = groupedMarkets[marketKey];
-                const syntheticSubGroups = {};
-
-                const subGroupKeywords = ['Volatility', 'Crash', 'Boom', 'Jump', 'Step', 'Range Break'];
-
-                const getSyntheticSubgroup = (displayName) => {
-                    for (const keyword of subGroupKeywords) {
-                        if (displayName.includes(keyword)) {
-                            return keyword;
-                        }
-                    }
-                    return 'Outros'; // Fallback for other indices
-                };
-                
-                syntheticSymbols.forEach(v => {
-                    const subGroup = getSyntheticSubgroup(v.display_name);
-                    if (!syntheticSubGroups[subGroup]) {
-                        syntheticSubGroups[subGroup] = [];
-                    }
-                    syntheticSubGroups[subGroup].push(v);
-                });
-
-                // Sort subgroup keys
-                const sortedSubGroupKeys = Object.keys(syntheticSubGroups).sort();
-
-                sortedSubGroupKeys.forEach(subGroupKey => {
-                    const optgroup = document.createElement('optgroup');
-                    optgroup.label = `Índices Sintéticos - ${subGroupKey}`;
-                    
-                    const sortedSymbols = syntheticSubGroups[subGroupKey].sort((a, b) => a.display_name.localeCompare(b.display_name));
-                    
-                    sortedSymbols.forEach(v => {
-                        const option = document.createElement('option');
-                        option.value = v.symbol;
-                        option.textContent = v.display_name;
-                        optgroup.appendChild(option);
-                        if (!defaultSymbol) {
-                            defaultSymbol = v.symbol;
-                        }
-                    });
-                    selector.appendChild(optgroup);
-                });
-
+    
+        socket.on('newLog', (log) => {
+            addLogToInterface(log);
+        });
+    
+        socket.on('downloadFile', (fileData) => {
+            downloadFile(fileData.filename, fileData.content, fileData.type);
+        });
+    
+        socket.on('connect', () => {
+            socket.emit('get_config');
+            socket.emit('get_strategies');
+            socket.emit('get_available_volatilities');
+        });
+    
+        function changeSymbol() {
+            const newSymbol = document.getElementById('symbolSelector').value;
+            socket.emit('update_config', { symbol: newSymbol });
+            clearDigits(); // Clear digits immediately on client side when changing symbol
+        }
+    
+        function updateInterface() {
+            // Conexão
+            const statusEl = document.getElementById('connectionStatus');
+            if (botState.connected) {
+                statusEl.textContent = 'Conectado';
+                statusEl.className = 'connection-status connected';
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = false;
             } else {
-                // Logic for other markets remains the same
+                statusEl.textContent = 'Desconectado';
+                statusEl.className = 'connection-status disconnected';
+                document.getElementById('startBtn').disabled = true;
+                document.getElementById('stopBtn').disabled = true;
+            }
+    
+            // Saldo
+            const balance = (botState.balance || 0).toFixed(2);
+            document.getElementById('navBalance').textContent = `${balance}`;
+    
+            // Lucro/Prejuízo
+            const profitEl = document.getElementById('profitDisplay');
+            const profit = botState.stats?.profit || 0;
+            profitEl.textContent = `${profit.toFixed(2)}`;
+            profitEl.className = profit >= 0 ? 'value-display positive' : 'value-display negative';
+    
+            // Estatísticas
+            document.getElementById('winsCount').textContent = botState.stats?.wins || 0;
+            document.getElementById('lossesCount').textContent = botState.stats?.losses || 0;
+            document.getElementById('totalTradesStats').textContent = botState.stats?.totalTrades || 0;
+            
+            const totalTrades = botState.stats?.totalTrades || 0;
+            const wins = botState.stats?.wins || 0;
+            const winRate = totalTrades > 0 ? ((wins / totalTrades) * 100).toFixed(1) : 0;
+            document.getElementById('winRateStats').textContent = `${winRate}%`;
+    
+            // Dígitos
+            console.log('botState.lastDigits on updateInterface:', botState.lastDigits);
+            const digitsContainer = document.getElementById('digitsDisplay');
+            digitsContainer.innerHTML = '';
+            if (botState.lastDigits && botState.lastDigits.length > 0) {
+                botState.lastDigits.forEach(digit => {
+                    const digitEl = document.createElement('div');
+                    digitEl.className = `digit ${digit % 2 === 0 ? 'even' : 'odd'}`;
+                    digitEl.textContent = digit;
+                    digitsContainer.appendChild(digitEl);
+                });
+            }
+        }
+    
+        function updateStrategySelector() {
+            const selector = document.getElementById('strategySelector');
+            selector.innerHTML = '<option value="">Selecione</option>';
+            
+            Object.keys(availableStrategies).forEach(strategyName => {
+                const option = document.createElement('option');
+                option.value = strategyName;
+                option.textContent = availableStrategies[strategyName].name || strategyName;
+                selector.appendChild(option);
+            });
+    
+            if (currentConfig.strategy) {
+                selector.value = currentConfig.strategy;
+            }
+        }
+    
+        function updateConfigInterface() {
+            if (currentConfig.symbol) {
+                document.getElementById('symbolSelector').value = currentConfig.symbol;
+            }
+    
+            if (currentConfig.strategy && availableStrategies[currentConfig.strategy]) {
+                generateStrategyConfigFields(currentConfig.strategy);
+            }
+        }
+    
+        function updateStrategyInfo(info) {
+            currentStrategySchema = info.schema || {};
+            currentTradingModes = info.tradingModes || {};
+            generateStrategyConfigFields(currentConfig.strategy);
+            updateTradingModesUI();
+        }
+    
+        function updateTradingModesUI() {
+            const container = document.getElementById('tradingModesContainer');
+            const selector = document.getElementById('tradingModeSelector');
+            
+            selector.innerHTML = ''; // Clear previous options
+    
+            const modes = ['Veloz', 'Balanceado', 'Preciso'];
+            modes.forEach(modeName => {
+                const option = document.createElement('option');
+                option.value = modeName;
+                option.textContent = modeName;
+                if (modeName === 'Balanceado') {
+                    option.selected = true;
+                }
+                selector.appendChild(option);
+            });
+    
+            // This was previously handled in the if/else, but now we always want it visible.
+            container.style.display = 'block'; 
+        }
+    
+        function changeTradingMode() {
+            const selectedMode = document.getElementById('tradingModeSelector').value;
+            if (selectedMode && currentTradingModes[selectedMode]) {
+                selectedModeSettings = currentTradingModes[selectedMode];
+            } else {
+                selectedModeSettings = {};
+            }
+        }
+    
+        function generateStrategyConfigFields(strategyName) {
+            // This function is now obsolete, as dynamic fields are not displayed.
+            const container = document.getElementById('strategyConfigFields');
+            container.innerHTML = '';
+            container.style.display = 'none';
+        }
+    
+        function changeStrategy() {
+            const selectedStrategy = document.getElementById('strategySelector').value;
+            console.log('Mudando estratégia para:', selectedStrategy);
+            if (selectedStrategy) {
+                socket.emit('change_strategy', selectedStrategy);
+            }
+        }
+    
+        function addLogToInterface(log) {
+            const logsContainer = document.getElementById('logsContainer');
+            const logEl = document.createElement('div');
+            logEl.className = `log-entry ${log.type}`;
+            logEl.innerHTML = `<strong>${log.timestamp}</strong> ${log.message}`;
+            logsContainer.insertBefore(logEl, logsContainer.firstChild);
+    
+            while (logsContainer.children.length > 50) {
+                logsContainer.removeChild(logsContainer.lastChild);
+            }
+        }
+    
+    
+    
+        function clearLogs() {
+            document.getElementById('logsContainer').innerHTML = '';
+        }
+    
+        function clearDigits() {
+            socket.emit('clear_digits');
+        }
+    
+        function connectBot() {
+            const token = 'NSZPzUBXPi37dnV'; 
+            socket.emit('connect_bot', token);
+        }
+    
+        function startBot() {
+            // Atualizar configurações antes de iniciar
+            const config = {};
+            
+            // Read common fields
+            config.baseStake = parseFloat(document.getElementById('baseStake').value) || 0.35;
+            config.multiplier = parseFloat(document.getElementById('riskManagement').value) || 2.2;
+            config.maxMartingale = parseInt(document.getElementById('maxMartingale').value) || 6;
+            config.profitGoal = parseFloat(document.getElementById('profitGoal').value) || 0;
+            
+            // Get selected trading mode and apply its settings
+            const selectedMode = document.getElementById('tradingModeSelector').value;
+            if (selectedMode && currentTradingModes[selectedMode]) {
+                Object.assign(config, currentTradingModes[selectedMode]);
+            }
+    
+            config.symbol = document.getElementById('symbolSelector').value;
+    
+            socket.emit('update_config', config);
+            socket.emit('start_bot');
+        }
+    
+        function stopBot() {
+            socket.emit('stop_bot');
+        }
+    
+        function downloadFile(filename, content, mimeType) {
+            const blob = new Blob([content], { type: mimeType });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+    
+        function downloadFullLog() {
+            socket.emit('download_full_log');
+        }
+    
+        function downloadSequenceReport() {
+            socket.emit('download_sequence_report');
+        }
+    
+        function resetStats() {
+            if (confirm('Tem certeza que deseja resetar todas as estatísticas?')) {
+                socket.emit('reset_stats');
+            }
+    }
+    
+        socket.on('availableVolatilities', (volatilities) => {
+            updateSymbolSelector(volatilities);
+        });
+    
+        function updateSymbolSelector(volatilities) {
+            const selector = document.getElementById('symbolSelector');
+            selector.innerHTML = ''; // Clear existing options
+            
+            if (!volatilities || volatilities.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'Nenhuma volatilidade disponível.';
+                selector.appendChild(option);
+                return;
+            }
+    
+            // Group volatilities by market
+            const groupedMarkets = {};
+            volatilities.forEach(v => {
+                if (!groupedMarkets[v.market]) {
+                    groupedMarkets[v.market] = [];
+                }
+                groupedMarkets[v.market].push(v);
+            });
+    
+            // Define display names for markets
+            const marketDisplayNames = {
+                'synthetic_index': 'Índices Sintéticos',
+                'forex': 'Forex',
+                'stocks': 'Ações',
+                'commodities': 'Commodities',
+                'cryptocurrency': 'Criptomoedas',
+            };
+    
+            // Sort market keys: synthetic_index first, then others alphabetically
+            const sortedMarketKeys = Object.keys(groupedMarkets).sort((a, b) => {
+                if (a === 'synthetic_index') return -1;
+                if (b === 'synthetic_index') return 1;
+                const nameA = marketDisplayNames[a] || a;
+                const nameB = marketDisplayNames[b] || b;
+                return nameA.localeCompare(nameB);
+            });
+    
+            let defaultSymbol = null;
+    
+            sortedMarketKeys.forEach(marketKey => {
+                if (marketKey === 'synthetic_index') {
+                    const syntheticSymbols = groupedMarkets[marketKey];
+                    const syntheticSubGroups = {};
+    
+                    const subGroupKeywords = ['Volatility', 'Crash', 'Boom', 'Jump', 'Step', 'Range Break'];
+    
+                    const getSyntheticSubgroup = (displayName) => {
+                        for (const keyword of subGroupKeywords) {
+                            if (displayName.includes(keyword)) {
+                                return keyword;
+                            }
+                        }
+                        return 'Outros'; // Fallback for other indices
+                    };
+                    
+                    syntheticSymbols.forEach(v => {
+                        const subGroup = getSyntheticSubgroup(v.display_name);
+                        if (!syntheticSubGroups[subGroup]) {
+                            syntheticSubGroups[subGroup] = [];
+                        }
+                        syntheticSubGroups[subGroup].push(v);
+                    });
+    
+            // Sort subgroup keys
+            const sortedSubGroupKeys = Object.keys(syntheticSubGroups).sort();
+    
+            sortedSubGroupKeys.forEach(subGroupKey => {
                 const optgroup = document.createElement('optgroup');
-                optgroup.label = marketDisplayNames[marketKey] || marketKey.replace(/_/g, ' ').toUpperCase();
+                optgroup.label = `Índices Sintéticos - ${subGroupKey}`;
                 
-                const sortedSymbols = groupedMarkets[marketKey].sort((a, b) => a.display_name.localeCompare(b.display_name));
-
+                const sortedSymbols = syntheticSubGroups[subGroupKey].sort((a, b) => a.display_name.localeCompare(b.display_name));
+                
                 sortedSymbols.forEach(v => {
                     const option = document.createElement('option');
                     option.value = v.symbol;
@@ -947,20 +972,56 @@ body {
                     }
                 });
                 selector.appendChild(optgroup);
+            });
+    
+                } else {
+                    // Logic for other markets remains the same
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = marketDisplayNames[marketKey] || marketKey.replace(/_/g, ' ').toUpperCase();
+                    
+                    const sortedSymbols = groupedMarkets[marketKey].sort((a, b) => a.display_name.localeCompare(b.display_name));
+    
+                    sortedSymbols.forEach(v => {
+                        const option = document.createElement('option');
+                        option.value = v.symbol;
+                        option.textContent = v.display_name;
+                        optgroup.appendChild(option);
+                        if (!defaultSymbol) {
+                            defaultSymbol = v.symbol;
+                        }
+                    });
+                    selector.appendChild(optgroup);
+                }
+            });
+    
+            // Select the current config.symbol if it exists in the new list
+            if (currentConfig.symbol && volatilities.some(v => v.symbol === currentConfig.symbol)) {
+                selector.value = currentConfig.symbol;
+            } else if (defaultSymbol) {
+                // Otherwise, select the first available symbol from the sorted list and update config
+                selector.value = defaultSymbol;
+                socket.emit('update_config', { symbol: defaultSymbol });
             }
-        });
-
-        // Select the current config.symbol if it exists in the new list
-        if (currentConfig.symbol && volatilities.some(v => v.symbol === currentConfig.symbol)) {
-            selector.value = currentConfig.symbol;
-        } else if (defaultSymbol) {
-            // Otherwise, select the first available symbol from the sorted list and update config
-            selector.value = defaultSymbol;
-            socket.emit('update_config', { symbol: defaultSymbol });
         }
-    }
-
-updateInterface();
-</script>
-</body>
-</html>
+    
+        function toggleMenu() {
+            document.getElementById("menuContent").classList.toggle("show");
+        }
+    
+        window.onclick = function(event) {
+            if (!event.target.matches('.hamburger-icon')) {
+                var dropdowns = document.getElementsByClassName("menu-content");
+                var i;
+                for (i = 0; i < dropdowns.length; i++) {
+                    var openDropdown = dropdowns[i];
+                    if (openDropdown.classList.contains('show')) {
+                        openDropdown.classList.remove('show');
+                    }
+                }
+            }
+        }
+    updateInterface();
+    </script>
+    </body>
+    </html>
+    

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calculadora de Martingale - Deriv Trading Bot</title>
+<script src="/socket.io/socket.io.js"></script>
+<link rel="stylesheet" href="/public/style.css">
+<style>
+    body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background: #0e0e0e;
+        color: #e0e0e0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 20px;
+    }
+    .calculator-container {
+        background: #1a1a1a;
+        padding: 24px;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 500px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #fff;
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    .form-group {
+        margin-bottom: 20px; /* Increased margin for better spacing between groups */
+    }
+    .form-group label {
+        display: block; /* Ensures label is above the input */
+        font-size: 12px;
+        color: #aaa;
+        margin-bottom: 6px; /* Space between label and input */
+    }
+    .form-group select,
+    .form-group input {
+        /* padding: 10px 0px; */
+        border-radius: 6px;
+        font-size: 14px;
+    }
+    .form-group label {
+        display: block;
+        font-size: 12px;
+        color: #aaa;
+        margin-bottom: 6px;
+    }
+    .form-group select {
+        width: 100%;
+        background: #252525;
+        border: 1px solid #333;
+        color: #e0e0e0;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+    .form-group input {
+        width: 95%;
+        background: #252525;
+        border: 1px solid #333;
+        color: #e0e0e0;
+        padding: 10px 12px;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+    .btn-calculate {
+        width: 100%;
+        padding: 12px;
+        border: none;
+        border-radius: 6px;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        background: #00d67a;
+        color: #0e0e0e;
+        margin-top: 10px;
+    }
+    .result-display {
+        margin-top: 20px;
+        background: #252525;
+        padding: 16px;
+        border-radius: 6px;
+        text-align: center;
+    }
+    .result-display .label {
+        font-size: 12px;
+        color: #aaa;
+        text-transform: uppercase;
+    }
+    .result-display .value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #ff4757; /* Negative color to show consumption */
+        margin-top: 8px;
+    }
+</style>
+</head>
+<body>
+
+<div class="calculator-container">
+    <h2 class="section-title">Calculadora de Martingale</h2>
+        <div class="form-group">
+        <label for="strategySelector">Estratégia</label>
+        <select id="strategySelector" onchange="changeStrategy()">
+            <option value="">Carregando...</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="riskManagement">Gerenciamento de Risco</label>
+        <select id="riskManagement">
+            <option value="">Selecione uma estratégia</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label for="consecutiveLosses">Quantidade de Perdas Seguidas</label>
+        <input type="number" id="consecutiveLosses" value="6" min="1">
+    </div>
+     <div class="form-group">
+        <label for="baseStake">Stake Inicial</label>
+        <input type="number" id="baseStake" value="0.35" min="0.35" step="0.01">
+    </div>
+    <button class="btn-calculate" onclick="calculateMartingale()">Calcular Consumo</button>
+    <div class="result-display" id="resultDisplay" style="display: none;">
+        <div class="label">Valor Consumido da Banca</div>
+        <div class="value" id="resultValue">$0.00</div>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    let strategiesData = {};
+
+    socket.on('connect', () => {
+        console.log('Conectado ao servidor.');
+        socket.emit('get_strategies');
+    });
+
+    socket.on('strategiesUpdate', (strategies) => {
+        strategiesData = strategies;
+        populateStrategies();
+    });
+    
+    socket.on('currentStrategyInfo', (info) => {
+        updateRiskManagement(info.riskModes);
+    });
+
+    function populateStrategies() {
+        const selector = document.getElementById('strategySelector');
+        selector.innerHTML = '<option value="">Selecione uma Estratégia</option>';
+        Object.keys(strategiesData).forEach(key => {
+            const option = document.createElement('option');
+            option.value = key;
+            option.textContent = strategiesData[key].name;
+            selector.appendChild(option);
+        });
+    }
+
+    function changeStrategy() {
+        const selectedStrategy = document.getElementById('strategySelector').value;
+        if (selectedStrategy) {
+            socket.emit('change_strategy', selectedStrategy);
+        } else {
+            const riskSelector = document.getElementById('riskManagement');
+            riskSelector.innerHTML = '<option value="">Selecione uma estratégia</option>';
+        }
+    }
+
+    function updateRiskManagement(riskModes) {
+        const riskSelector = document.getElementById('riskManagement');
+        riskSelector.innerHTML = '';
+        if (riskModes && Object.keys(riskModes).length > 0) {
+            Object.keys(riskModes).forEach(modeName => {
+                const option = document.createElement('option');
+                option.value = riskModes[modeName];
+                option.textContent = modeName;
+                riskSelector.appendChild(option);
+            });
+        } else {
+            // If no risk modes, maybe get it from the old select
+            const oldRiskOptions = {
+                "Fixo": 1,
+                "Conservador": 2.8,
+                "Otimizado": 3,
+                "Agressivo": 3.2
+            };
+            Object.keys(oldRiskOptions).forEach(modeName => {
+                const option = document.createElement('option');
+                option.value = oldRiskOptions[modeName];
+                option.textContent = modeName;
+                riskSelector.appendChild(option);
+            });
+        }
+    }
+
+    function calculateMartingale() {
+        const baseStake = parseFloat(document.getElementById('baseStake').value);
+        const consecutiveLosses = parseInt(document.getElementById('consecutiveLosses').value);
+        const multiplier = parseFloat(document.getElementById('riskManagement').value);
+
+        if (isNaN(baseStake) || isNaN(consecutiveLosses) || isNaN(multiplier) || baseStake <= 0 || consecutiveLosses < 1 || multiplier <= 1) {
+            alert("Por favor, insira valores válidos e selecione uma estratégia com gerenciamento de risco.");
+            return;
+        }
+
+        let totalLoss = 0;
+        let currentStake = baseStake;
+
+        for (let i = 0; i < consecutiveLosses; i++) {
+            totalLoss += currentStake;
+            currentStake *= multiplier;
+        }
+
+        document.getElementById('resultValue').textContent = `$${totalLoss.toFixed(2)}`;
+        document.getElementById('resultDisplay').style.display = 'block';
+    }
+
+</script>
+
+</body>
+</html>

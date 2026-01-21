@@ -167,6 +167,10 @@ app.get("/index.html", isAuthenticated, (req, res) => {
     res.sendFile(path.join(__dirname, "views", "index.html"));
 });
 
+app.get("/martingale-calculator.html", isAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, "views", "martingale-calculator.html"));
+});
+
 app.get("/api/volatilities", isAuthenticated, async (req, res) => {
   if (!derivAPI.isConnectedToAPI()) {
     return res.status(503).json({ error: "API da Deriv não conectada." });
@@ -529,7 +533,8 @@ io.on("connection", (socket) => {
         name: currentStrategy.name,
         description: getStrategyDescription(strategyName),
         schema: currentStrategy.getConfigSchema(),
-        tradingModes: typeof currentStrategy.getTradingModes === 'function' ? currentStrategy.getTradingModes() : {}
+        tradingModes: typeof currentStrategy.getTradingModes === 'function' ? currentStrategy.getTradingModes() : {},
+        riskModes: typeof currentStrategy.getRiskModes === 'function' ? currentStrategy.getRiskModes() : {}
       });
 
       io.emit("configUpdate", config);
